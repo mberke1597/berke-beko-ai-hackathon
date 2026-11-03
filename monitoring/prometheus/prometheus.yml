@@ -1,0 +1,32 @@
+# Prometheus v3.15. App metrics arrive by OTLP push from the collector
+# (--web.enable-otlp-receiver); Tempo's metrics-generator uses remote write
+# (--web.enable-remote-write-receiver). Only self/infra targets are scraped.
+global:
+  scrape_interval: 30s
+  evaluation_interval: 30s
+
+otlp:
+  promote_resource_attributes:
+    - service.name
+    - service.namespace
+    - service.version
+    - deployment.environment.name
+  keep_identifying_resource_attributes: true
+
+storage:
+  tsdb:
+    out_of_order_time_window: 30m
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+  - job_name: tempo
+    static_configs:
+      - targets: ["tempo:3200"]
+  - job_name: loki
+    static_configs:
+      - targets: ["loki:3100"]
+  - job_name: otel-collector
+    static_configs:
+      - targets: ["otel-collector:8888"]
