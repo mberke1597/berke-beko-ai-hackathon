@@ -7,9 +7,9 @@ flowchart LR
   CD -->|docker buildx linux/arm64| GHCR[(GHCR<br/>beko-backend, beko-frontend<br/>git-sha and latest tags)]
   CD -->|SSH as deploy user| VM
 
-  subgraph OCI["Oracle Cloud — Italy Northwest (Milan)"]
-    subgraph VCN["VCN + public subnet<br/>security list: 22, 80, 443"]
-      VM["Ampere A1 VM<br/>Ubuntu 24.04 ARM, 2 OCPU / 12 GB<br/>public IP"]
+  subgraph AZ["Azure — resource group beko-rg"]
+    subgraph VCN["VNet + NSG<br/>inbound 22, 80, 443"]
+      VM["Linux VM, Ubuntu 24.04<br/>size TBD, about 4 vCPU / 16 GB<br/>static public IP + DNS label"]
     end
   end
 
@@ -22,7 +22,7 @@ flowchart LR
   VM --- K3S
   GHCR -->|rollout pulls images| APP
 
-  Users([Users]) -->|"https://VM-IP.sslip.io"| TR
+  Users([Users]) -->|"https://label.region.cloudapp.azure.com"| TR
   TR --> APP
   APP --> DATA & OBS
   APP -->|HTTPS| Anth[[Anthropic API]]

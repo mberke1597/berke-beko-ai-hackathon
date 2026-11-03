@@ -10,7 +10,7 @@ All diagrams are Mermaid (they render on GitHub and in VS Code). Context: [../ov
 | 04 | [Device command](04-device-command-sequence.md) | sequence | app / remote / AI command through mock HomeWhiz to the simulator |
 | 05 | [Presence](05-presence-flow.md) | flowchart | mock location → leave range → setback → return → pre-condition |
 | 06 | [Household tasks and conflicts](06-household-task-flow.md) | flowchart + sequence | task creation and fair distribution; comfort conflict resolution |
-| 07 | [Deployment](07-deployment.md) | flowchart | GitHub → GHCR → Oracle VM → k3s → users |
+| 07 | [Deployment](07-deployment.md) | flowchart | GitHub → GHCR → Azure VM → k3s → users |
 | 08 | [PostgreSQL model](08-er-postgres.md) | ER | configuration, RBAC, home domain |
 | 09 | [MongoDB model](09-mongo-document-model.md) | class | event documents linked by trace |
 | 10 | [Comfort decision](10-comfort-decision.md) | flowchart | comfort engine + priority mode → cheapest action |

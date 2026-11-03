@@ -7,6 +7,8 @@ export interface ProblemDetails {
   status?: number;
   detail?: string;
   traceId?: string;
+  /** Stable machine-readable reason, e.g. "value_out_of_range" (device commands). */
+  code?: string;
 }
 
 export type ApiErrorKind = "http" | "network" | "invalid-response";
@@ -76,5 +78,6 @@ export function parseProblemDetails(value: unknown): ProblemDetails | undefined 
   if (typeof value.status === "number") problem.status = value.status;
   if (typeof value.detail === "string") problem.detail = value.detail;
   if (typeof value.traceId === "string") problem.traceId = value.traceId;
+  if (typeof value.code === "string") problem.code = value.code;
   return problem;
 }
