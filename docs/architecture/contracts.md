@@ -186,6 +186,44 @@ Every accepted command writes a Mongo `device_events` document: `{ homeId, devic
   - `DeviceStateChanged` `{ "appliance": Appliance }`: after every command and whenever the simulator changes visible state (rounded: 0.1 °C, 1 % humidity, 1 min remaining).
   - `DeviceEvent` `{ "applianceId", "event": "finished|preheated|timer_done|error", "atUtc" }`.
 
+## Phase 2 — agent runtime, chat, runs (Çeliknaz first agent)
+
+Design: `Planning/Proposal.md` §1 and §3, `docs/diagrams/03-agent-run-sequence.md`. No auth yet (Phase 4): the caller is household member `memberId` (default `ayse`), user id `demo-user`.
+
+### Seeded agent
+- Agent id `celiknaz`, name "Çeliknaz", model `Anthropic__DefaultModel`, Turkish instructions from `Planning/Celiknaz.md` §7 (short spoken answers, state what changed and its cost effect, ask before disruptive actions, allowed topics: the home's Beko products, comfort, energy, household tasks).
+- Workflow v1 (Postgres, versioned): `trigger.user_message → agent.llm → respond`. Guard steps arrive in Phase 4; the engine must already support inserting them.
+- Tools in this phase: `get_home_status` (home, members, all appliances with state, outdoor temp from `Simulation__OutdoorTempC`) and `control_device` (`{ applianceId, type, value }`, same command rules and 422 codes as slice 1, sent with `source: "ai"`). Both go through `IHomeWhizClient`.
+
+### REST
+
+| Method + path | Request / response |
+|---|---|
+| `GET /api/agents` | `[{ "id", "name", "description", "model" }]` |
+| `GET /api/agents/{id}` | `{ "id", "name", "description", "model", "instructions", "tools": [{ "name", "description" }], "subagents": [], "workflowVersion" }` |
+| `POST /api/conversations` | `{ "agentId": "celiknaz", "memberId": "ayse" }` → `201 { "conversationId", "agentId", "createdAtUtc" }` |
+| `GET /api/conversations/{id}/messages` | `[{ "messageId", "role": "user\|assistant", "text", "runId", "createdAtUtc", "actions": [Action] }]` |
+| `POST /api/conversations/{id}/messages` | `{ "text": "Ev soğudu, biraz ısıt", "channel": "voice\|text" }` → `202 { "runId", "traceId" }`; the run continues in the background and streams over `RunHub` |
+| `GET /api/runs/{runId}` | `{ "runId", "conversationId", "agentId", "workflowVersion", "status": "running\|completed\|failed", "traceId", "startedAtUtc", "durationMs", "totals": Totals, "steps": [Step] }` |
+
+- `Action`: `{ "applianceId", "command", "value", "accepted": true }`, one per `control_device` call.
+- `Totals`: `{ "inputTokens", "outputTokens", "cacheReadTokens", "cacheWriteTokens", "costUsd", "durationMs" }`.
+- `Step`: `{ "stepId", "parentStepId", "type", "name", "status": "pending\|running\|completed\|failed", "startedAtUtc", "durationMs", "tokens": { "input", "output" } | null, "costUsd", "summary", "spanId" }`. `type` is one of the workflow step types plus `llm.call` and `tool.call` children under `agent.llm`. `summary` is a short human-readable line (tool name + key args, or model + stop reason).
+- Errors: problem+json. LLM failure → run `failed`, a `StepFailed` event, and a Turkish fallback answer "Şu anda yanıt veremiyorum, lütfen tekrar deneyin."
+
+### SignalR `RunHub` — `/hubs/runs`
+- Client → server: `JoinConversation(conversationId)`.
+- Server → client (group `conversation:{conversationId}`):
+  - `RunStarted` `{ runId, conversationId, agentId, traceId }`
+  - `StepStarted` `{ runId, step: Step }`
+  - `StepCompleted` `{ runId, step: Step }`
+  - `StepFailed` `{ runId, step: Step, error }`
+  - `TextDelta` `{ runId, delta }` (assistant text as it streams)
+  - `RunCompleted` `{ runId, text, actions: [Action], totals: Totals }`
+
+### Recording (every step, through the shared step wrapper)
+OTel span (`invoke_agent celiknaz`, `chat {model}`, `execute_tool {tool}`, GenAI attributes), Mongo documents (`conversations`, `messages`, `runs`, `run_steps`, `llm_calls`, `tool_calls`, all with `trace_id`/`span_id`), the SignalR events above, metrics (`gen_ai_client_token_usage`, `gen_ai_cost_usd_total{agent,model}`, `agent_run_duration_seconds`, `tool_calls_total{tool,status}`). Cost from `PricingOptions`; daily rollup to Postgres `cost_daily`.
+
 ## Later phases
 
 Phase 2+ sections (auth, agents, chat, runs, workflow, dashboard, SignalR `RunHub` events) are added here before those phases start.
