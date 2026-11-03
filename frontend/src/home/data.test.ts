@@ -90,19 +90,16 @@ describe("http home api", () => {
     expect((await api.getDevice("ac-salon")).id).toBe("ac-salon");
     const result = await api.sendCommand("ac-salon", { type: "setpoint", value: 24, source: "remote", memberId: "ayse" });
     expect(result.accepted).toBe(true);
-    const from = new Date("2026-11-02T10:00:00Z");
-    const to = new Date("2026-11-03T10:00:00Z");
-    await api.getTelemetry("ac-salon", from, to);
+    await api.getTelemetry("ac-salon");
 
     expect(calls.map((c) => c.url)).toEqual([
       "/api/homes/me",
       "/api/devices/ac-salon",
       "/api/devices/ac-salon/commands",
-      telemetryUrl("ac-salon", from, to),
+      "/api/devices/ac-salon/telemetry",
     ]);
-    expect(telemetryUrl("ac-salon", from, to)).toBe(
-      "/api/devices/ac-salon/telemetry?fromUtc=2026-11-02T10%3A00%3A00.000Z&toUtc=2026-11-03T10%3A00%3A00.000Z",
-    );
+    // Simulator time runs faster than the browser clock: telemetry is called without a range.
+    expect(telemetryUrl("ac-salon")).toBe("/api/devices/ac-salon/telemetry");
     const post = calls[2]?.init;
     expect(post?.method).toBe("POST");
     expect(JSON.parse(post?.body as string)).toEqual({ type: "setpoint", value: 24, source: "remote", memberId: "ayse" });
@@ -116,6 +113,23 @@ describe("http home api", () => {
     const error = await api.sendCommand("ac-salon", { type: "setpoint", value: 99, source: "app", memberId: "ayse" }).catch((e: unknown) => e);
     expect(error).toBeInstanceOf(ApiError);
     expect(commandErrorMessage(error)).toBe(tr.home.errors.unsupported);
+  });
+
+  it.each([
+    ["command_not_supported", tr.home.errors.unsupported],
+    ["invalid_value", tr.home.errors.invalidValue],
+    ["value_out_of_range", tr.home.errors.invalid],
+    ["invalid_state", tr.home.errors.busy],
+  ])("maps 422 code %s", async (code, message) => {
+    const fetchFn: FetchFn = () =>
+      Promise.resolve(json({ title: "Türkçe başlık", status: 422, code }, 422, "application/problem+json"));
+    const api = createHttpHomeApi(createApiClient(fetchFn));
+    const error = (await api.sendCommand("washer-1", { type: "pause", value: null, source: "app", memberId: "ayse" }).catch((e: unknown) => e)) as ApiError;
+    expect(error.problem?.code).toBe(code);
+    expect(commandErrorMessage(error)).toBe(message);
+  });
+
+  it("maps other statuses", () => {
     expect(commandErrorMessage(new ApiError("http", 404))).toBe(tr.home.errors.deviceNotFound);
     expect(commandErrorMessage(new ApiError("network", 0))).toBe(tr.errors.network);
     expect(commandErrorMessage("boom")).toBe(tr.errors.unknown);
@@ -160,6 +174,12 @@ describe("mock home", () => {
       .sendCommand("fridge-1", { type: "power", value: false, source: "app", memberId: "ayse" })
       .catch((e: unknown) => e)) as ApiError;
     expect(unsupported.status).toBe(422);
+    expect(error.problem?.code).toBe("value_out_of_range");
+    expect(unsupported.problem?.code).toBe("command_not_supported");
+    const notRunning = (await mock.api
+      .sendCommand("dishwasher-1", { type: "pause", value: null, source: "app", memberId: "ayse" })
+      .catch((e: unknown) => e)) as ApiError;
+    expect(notRunning.problem?.code).toBe("invalid_state");
     const missing = (await mock.api.getDevice("nope").catch((e: unknown) => e)) as ApiError;
     expect(missing.status).toBe(404);
     stop();
@@ -170,11 +190,30 @@ describe("mock home", () => {
     const mock = createMockHome(options);
     const event = vi.fn();
     mock.connectLive("home-1", { stateChanged: vi.fn(), event, status: vi.fn() });
-    for (let i = 0; i < 6; i++) mock.tick();
+    for (let i = 0; i < 42; i++) mock.tick();
     const washer = mock.snapshot().appliances.find((a) => a.id === "washer-1");
     expect(washer?.state.status).toBe("finished");
     expect(washer?.state.program?.progressPct).toBe(100);
     expect(event).toHaveBeenCalledWith({ applianceId: "washer-1", event: "finished", atUtc: "2026-11-03T10:00:00.000Z" });
+    mock.dispose();
+  });
+
+  it("keeps the program at full duration after stop and power off", async () => {
+    const mock = createMockHome(options);
+    const stopped = await mock.api.sendCommand("washer-1", { type: "stop", value: null, source: "app", memberId: "ayse" });
+    expect(stopped.appliance.state.status).toBe("idle");
+    expect(stopped.appliance.state.program).toEqual({ program: "cotton40", temperatureC: 40, remainingMin: 120, progressPct: 0, startAtUtc: null });
+    const started = await mock.api.sendCommand("washer-1", {
+      type: "start_program",
+      value: { program: "quick30", temperatureC: null, startAtUtc: null },
+      source: "app",
+      memberId: "ayse",
+    });
+    expect(started.appliance.state.program).toMatchObject({ program: "quick30", temperatureC: 30, remainingMin: 30 });
+    expect(started.appliance.state.powerW % 10).toBe(0);
+    const off = await mock.api.sendCommand("washer-1", { type: "power", value: false, source: "app", memberId: "ayse" });
+    expect(off.appliance.state.status).toBe("off");
+    expect(off.appliance.state.program?.remainingMin).toBe(30);
     mock.dispose();
   });
 
@@ -189,9 +228,7 @@ describe("mock home", () => {
 
   it("generates 24 h telemetry ending at the current room temperature", async () => {
     const mock = createMockHome(options);
-    const to = new Date("2026-11-03T10:00:00Z");
-    const from = new Date(to.getTime() - 24 * 3600 * 1000);
-    const points = await mock.api.getTelemetry("ac-salon", from, to);
+    const points = await mock.api.getTelemetry("ac-salon");
     expect(points).toHaveLength(49);
     expect(points.at(-1)?.roomTempC).toBe(24.8);
     expect(points.at(-1)?.humidityPct).toBe(55);
@@ -229,7 +266,7 @@ describe("store and session", () => {
     session.store.subscribe((c) => {
       if (c.kind === "event") events(c.event);
     });
-    for (let i = 0; i < 6; i++) mock.tick();
+    for (let i = 0; i < 42; i++) mock.tick();
     expect(session.store.getAppliance("washer-1")?.state.status).toBe("finished");
     expect(events).toHaveBeenCalledTimes(1);
     session.dispose();

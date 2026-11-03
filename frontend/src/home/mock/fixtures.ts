@@ -13,14 +13,21 @@ const acCapabilities = (): Capabilities => ({
   programs: [],
 });
 
-function ac(id: string, roomId: string, displayName: string, ac: NonNullable<Appliance["state"]["ac"]>, power: boolean): Appliance {
+function ac(
+  id: string,
+  roomId: string,
+  displayName: string,
+  model: string,
+  ac: NonNullable<Appliance["state"]["ac"]>,
+  power: boolean,
+): Appliance {
   return {
     id,
     homeId: DEMO_HOME_ID,
     roomId,
     type: "air_conditioner",
     displayName,
-    model: "Beko BK-12 (demo)",
+    model,
     capabilities: acCapabilities(),
     state: {
       power,
@@ -35,48 +42,64 @@ function ac(id: string, roomId: string, displayName: string, ac: NonNullable<App
   };
 }
 
-/** Program durations in minutes, used by the simulator when a program starts. */
-export const PROGRAM_DURATIONS: Readonly<Record<string, number>> = {
-  cotton40: 95,
-  cotton60: 120,
-  synthetic: 70,
-  eco: 180,
-  quick30: 30,
-  wool: 45,
-  eco50: 150,
-  auto: 120,
-  intensive70: 140,
-  quick: 35,
-  glass: 60,
-};
+export interface ProgramProfile {
+  name: string;
+  temperatureC: number;
+  durationMin: number;
+  powerW: number;
+}
+
+/** Same fictional profiles as the backend `ProgramCatalog`. */
+export const WASHER_PROGRAMS: readonly ProgramProfile[] = [
+  { name: "cotton40", temperatureC: 40, durationMin: 120, powerW: 450 },
+  { name: "cotton60", temperatureC: 60, durationMin: 150, powerW: 650 },
+  { name: "eco40", temperatureC: 40, durationMin: 180, powerW: 300 },
+  { name: "synthetic40", temperatureC: 40, durationMin: 90, powerW: 400 },
+  { name: "quick30", temperatureC: 30, durationMin: 30, powerW: 500 },
+];
+
+export const DISHWASHER_PROGRAMS: readonly ProgramProfile[] = [
+  { name: "eco50", temperatureC: 50, durationMin: 180, powerW: 350 },
+  { name: "auto", temperatureC: 55, durationMin: 120, powerW: 600 },
+  { name: "intensive70", temperatureC: 70, durationMin: 140, powerW: 900 },
+  { name: "quick35", temperatureC: 35, durationMin: 30, powerW: 800 },
+];
+
+export function findProgram(type: Appliance["type"], name: string): ProgramProfile | undefined {
+  const list = type === "washing_machine" ? WASHER_PROGRAMS : type === "dishwasher" ? DISHWASHER_PROGRAMS : [];
+  return list.find((p) => p.name === name);
+}
+
+export const KITCHEN_TEMP_C = 22;
 
 /** Returns a fresh deep copy of the demo home every call. */
 export function createDemoHome(): HomeView {
   const appliances: Appliance[] = [
-    ac("ac-salon", "salon", "Salon Kliması", { setpoint: 25, mode: "cool", fan: "auto", roomTempC: 24.8, humidityPct: 55 }, true),
-    ac("ac-yatak", "yatak-odasi", "Yatak Odası Kliması", { setpoint: 23, mode: "cool", fan: "low", roomTempC: 26.1, humidityPct: 50 }, false),
-    ac("ac-cocuk", "cocuk-odasi", "Çocuk Odası Kliması", { setpoint: 24, mode: "auto", fan: "auto", roomTempC: 25.6, humidityPct: 52 }, false),
+    ac("ac-salon", "salon", "Salon Kliması", "Beko BK-12 (demo)", { setpoint: 25, mode: "cool", fan: "auto", roomTempC: 24.8, humidityPct: 55 }, true),
+    ac("ac-yatak", "yatak-odasi", "Yatak Odası Kliması", "Beko BK-09 (demo)", { setpoint: 24, mode: "cool", fan: "auto", roomTempC: 27.5, humidityPct: 58 }, false),
+    ac("ac-cocuk", "cocuk-odasi", "Çocuk Odası Kliması", "Beko BK-09 (demo)", { setpoint: 23, mode: "cool", fan: "auto", roomTempC: 27, humidityPct: 57 }, false),
     {
       id: "dishwasher-1",
       homeId: DEMO_HOME_ID,
       roomId: "mutfak",
       type: "dishwasher",
       displayName: "Bulaşık Makinesi",
-      model: "Beko BDFN (demo)",
+      model: "Beko BDF-1500 (demo)",
       capabilities: {
         commands: ["power", "start_program", "pause", "resume", "stop"],
         modes: [],
         fanLevels: [],
         setpoint: null,
-        programs: ["eco50", "auto", "intensive70", "quick", "glass"],
+        programs: DISHWASHER_PROGRAMS.map((p) => p.name),
       },
       state: {
         power: true,
-        status: "running",
-        powerW: 1800,
+        status: "idle",
+        powerW: 0,
         updatedAtUtc: FIXTURE_TIME,
         ac: null,
-        program: { program: "eco50", temperatureC: 50, remainingMin: 42, progressPct: 60, startAtUtc: null },
+        // Idle washers keep the selected program at full duration (contract).
+        program: { program: "eco50", temperatureC: 50, remainingMin: 180, progressPct: 0, startAtUtc: null },
         oven: null,
         fridge: null,
       },
@@ -87,12 +110,12 @@ export function createDemoHome(): HomeView {
       roomId: "mutfak",
       type: "oven",
       displayName: "Fırın",
-      model: "Beko BBIM (demo)",
+      model: "Beko BBIM-13300 (demo)",
       capabilities: {
         commands: ["power", "mode", "set_oven", "pause", "resume", "stop"],
         modes: ["conventional", "fan", "grill"],
         fanLevels: [],
-        setpoint: null,
+        setpoint: { min: 50, max: 250, step: 5 },
         programs: [],
       },
       state: {
@@ -102,7 +125,7 @@ export function createDemoHome(): HomeView {
         updatedAtUtc: FIXTURE_TIME,
         ac: null,
         program: null,
-        oven: { mode: "conventional", targetTempC: 180, currentTempC: 24, timerMin: null },
+        oven: { mode: "conventional", targetTempC: 180, currentTempC: KITCHEN_TEMP_C, timerMin: 0 },
         fridge: null,
       },
     },
@@ -112,7 +135,7 @@ export function createDemoHome(): HomeView {
       roomId: "mutfak",
       type: "refrigerator",
       displayName: "Buzdolabı",
-      model: "Beko GN (demo)",
+      model: "Beko RCNA-406 (demo)",
       capabilities: { commands: [], modes: [], fanLevels: [], setpoint: null, programs: [] },
       state: {
         power: true,
@@ -131,13 +154,13 @@ export function createDemoHome(): HomeView {
       roomId: "camasir-odasi",
       type: "washing_machine",
       displayName: "Çamaşır Makinesi",
-      model: "Beko WTV (demo)",
+      model: "Beko WTV-9612 (demo)",
       capabilities: {
         commands: ["power", "start_program", "pause", "resume", "stop"],
         modes: [],
         fanLevels: [],
         setpoint: null,
-        programs: ["cotton40", "cotton60", "synthetic", "eco", "quick30", "wool"],
+        programs: WASHER_PROGRAMS.map((p) => p.name),
       },
       state: {
         power: true,
@@ -145,8 +168,7 @@ export function createDemoHome(): HomeView {
         powerW: 450,
         updatedAtUtc: FIXTURE_TIME,
         ac: null,
-        // Close to the end so the "finished" toast shows early in a demo.
-        program: { program: "cotton40", temperatureC: 40, remainingMin: 6, progressPct: 94, startAtUtc: null },
+        program: { program: "cotton40", temperatureC: 40, remainingMin: 42, progressPct: 65, startAtUtc: null },
         oven: null,
         fridge: null,
       },

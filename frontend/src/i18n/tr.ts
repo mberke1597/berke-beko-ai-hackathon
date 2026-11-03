@@ -140,6 +140,9 @@ export const tr = {
       cotton: "Pamuklu",
       cotton40: "Pamuklu 40",
       cotton60: "Pamuklu 60",
+      eco40: "Eko 40",
+      synthetic40: "Sentetik 40",
+      quick35: "Hızlı 35",
       synthetic: "Sentetik",
       wool: "Yünlü",
       quick: "Hızlı",
@@ -216,6 +219,7 @@ export const tr = {
     errors: {
       unsupported: "Bu ayar desteklenmiyor.",
       invalid: "Bu değer cihazın sınırları dışında.",
+      invalidValue: "Geçersiz ayar değeri.",
       deviceNotFound: "Cihaz bulunamadı.",
       busy: "Cihaz şu anda bu komutu kabul edemiyor.",
     },

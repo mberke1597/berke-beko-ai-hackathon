@@ -435,11 +435,9 @@ export function renderDetail(main: HTMLElement, session: HomeSession, id: string
     const controller = new AbortController();
     chartController = controller;
     renderLoading(state.chart, tr.home.detail.chartLoading);
-    const to = new Date();
-    const from = new Date(to.getTime() - 24 * 60 * 60 * 1000);
     void session
       .api()
-      .then((api) => api.getTelemetry(appliance.id, from, to, { signal: controller.signal }))
+      .then((api) => api.getTelemetry(appliance.id, { signal: controller.signal }))
       .then(
         (points) => {
           if (!controller.signal.aborted) state.chart.replaceChildren(createTelemetryChart(points));

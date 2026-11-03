@@ -114,6 +114,8 @@ export function cardSummary(appliance: Appliance): CardSummary {
       };
     }
     if (tone === "finished") return { primary: tr.home.card.finished, secondary: name, progressPct: 100 };
+    // Idle keeps the selected program (contract): show it as the secondary line.
+    if (tone === "idle") return { primary: toneLabel(appliance), secondary: name, progressPct: undefined };
     return { primary: toneLabel(appliance), secondary: undefined, progressPct: undefined };
   }
 

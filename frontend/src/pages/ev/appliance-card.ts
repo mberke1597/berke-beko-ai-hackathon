@@ -38,7 +38,7 @@ export function createApplianceCard(appliance: Appliance, handlers: CardHandlers
     {
       class: "appliance-card__link",
       href: hrefFor(devicePath(appliance.id)),
-      "aria-label": tr.home.card.open(appliance.displayName, `${status}, ${summary.primary}`),
+      "aria-label": tr.home.card.open(appliance.displayName, status === summary.primary ? status : `${status}, ${summary.primary}`),
     },
     [
       el("span", { class: "appliance-card__icon" }, [icon(applianceIconName(appliance.type), "icon icon--lg")]),

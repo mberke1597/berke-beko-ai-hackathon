@@ -15,7 +15,7 @@ import type {
   HomeView,
   TelemetryPoint,
 } from "../types.ts";
-import { createDemoHome, PROGRAM_DURATIONS } from "./fixtures.ts";
+import { createDemoHome, findProgram, KITCHEN_TEMP_C } from "./fixtures.ts";
 
 export interface MockHomeOptions {
   /** Real milliseconds between simulator ticks; 0 disables the timer (tests call `tick()`). */
@@ -46,9 +46,13 @@ function clone<T>(value: T): T {
   return structuredClone(value);
 }
 
-function problem(status: number, title: string): ApiError {
-  return new ApiError("http", status, { status, title });
+type RejectionCode = "command_not_supported" | "invalid_value" | "value_out_of_range" | "invalid_state";
+
+function problem(status: number, title: string, code?: RejectionCode): ApiError {
+  return new ApiError("http", status, code === undefined ? { status, title } : { status, title, code });
 }
+
+const round10 = (value: number): number => Math.round(value / 10) * 10;
 
 export function createMockHome(options: MockHomeOptions = {}): MockHome {
   const { tickMs = 2000, minutesPerTick = 1, latencyMs = 120, now = () => new Date() } = options;
@@ -95,19 +99,29 @@ export function createMockHome(options: MockHomeOptions = {}): MockHome {
     return Math.abs(ac.roomTempC - ac.setpoint) > 0.3 ? (ac.mode === "eco" ? 600 : 820) : 350;
   }
 
+  /** Like the backend: a stopped washer keeps its program, ready again at full duration. */
+  function resetProgram(appliance: Appliance): void {
+    const s = appliance.state;
+    if (!s.program) return;
+    const duration = findProgram(appliance.type, s.program.program)?.durationMin ?? s.program.remainingMin;
+    s.program = { ...s.program, remainingMin: duration, progressPct: 0, startAtUtc: null };
+  }
+
   function apply(appliance: Appliance, command: DeviceCommand): void {
     const s = appliance.state;
     switch (command.type) {
       case "power":
-        s.power = command.value;
-        if (!command.value) {
+        if (appliance.type === "air_conditioner") {
+          s.power = command.value;
+          s.status = command.value ? "running" : "off";
+        } else if (!command.value) {
+          s.power = false;
           s.status = "off";
-          if (s.program) s.program = { ...s.program, remainingMin: 0, progressPct: 0 };
-          if (s.oven) s.oven = { ...s.oven, timerMin: null };
+          resetProgram(appliance);
+          if (s.oven) s.oven = { ...s.oven, timerMin: 0 };
           preheated.delete(appliance.id);
-        } else if (appliance.type === "air_conditioner") {
-          s.status = "running";
-        } else {
+        } else if (!s.power) {
+          s.power = true;
           s.status = "idle";
         }
         break;
@@ -122,30 +136,31 @@ export function createMockHome(options: MockHomeOptions = {}): MockHome {
         if (s.ac) s.ac.fan = command.value;
         break;
       case "start_program": {
-        const duration = PROGRAM_DURATIONS[command.value.program] ?? 90;
+        if (s.status === "running" || s.status === "paused") throw problem(422, "Program already running", "invalid_state");
+        const profile = findProgram(appliance.type, command.value.program);
         s.power = true;
         s.status = "running";
         s.program = {
           program: command.value.program,
-          temperatureC: command.value.temperatureC ?? defaultProgramTemp(command.value.program),
-          remainingMin: duration,
+          temperatureC: command.value.temperatureC ?? profile?.temperatureC ?? defaultProgramTemp(command.value.program),
+          remainingMin: profile?.durationMin ?? 60,
           progressPct: 0,
           startAtUtc: command.value.startAtUtc,
         };
         break;
       }
       case "pause":
-        if (s.status !== "running") throw problem(409, "Not running");
+        if (s.status !== "running") throw problem(422, "Not running", "invalid_state");
         s.status = "paused";
         break;
       case "resume":
-        if (s.status !== "paused") throw problem(409, "Not paused");
+        if (s.status !== "paused") throw problem(422, "Not paused", "invalid_state");
         s.status = "running";
         break;
       case "stop":
-        s.status = "idle";
-        if (s.program) s.program = { ...s.program, remainingMin: 0, progressPct: 0 };
-        if (s.oven) s.oven = { ...s.oven, timerMin: null };
+        s.status = s.power ? "idle" : "off";
+        resetProgram(appliance);
+        if (s.oven) s.oven = { ...s.oven, timerMin: 0 };
         preheated.delete(appliance.id);
         break;
       case "set_oven":
@@ -159,18 +174,22 @@ export function createMockHome(options: MockHomeOptions = {}): MockHome {
     touch(appliance);
   }
 
+  /** Visible power draw, rounded to 10 W like the backend. */
   function powerFor(appliance: Appliance): number {
+    return round10(rawPower(appliance));
+  }
+
+  function rawPower(appliance: Appliance): number {
     const s = appliance.state;
     if (!s.power || s.status === "off") return 0;
     switch (appliance.type) {
       case "air_conditioner":
         return acPower(appliance);
       case "washing_machine":
-        return s.status === "running" ? 450 : 2;
       case "dishwasher":
-        return s.status === "running" ? 1800 : 2;
+        return s.status === "running" && s.program ? (findProgram(appliance.type, s.program.program)?.powerW ?? 400) : 0;
       case "oven":
-        if (s.status !== "running" || !s.oven) return 2;
+        if (s.status !== "running" || !s.oven) return 0;
         return s.oven.currentTempC < s.oven.targetTempC ? 2400 : 900;
       case "refrigerator":
         return 90;
@@ -223,8 +242,8 @@ export function createMockHome(options: MockHomeOptions = {}): MockHome {
           event = "timer_done";
         }
       }
-    } else if (s.oven && s.status !== "running" && s.oven.currentTempC > 24) {
-      s.oven.currentTempC = Math.max(24, Math.round(s.oven.currentTempC - 5 * minutesPerTick));
+    } else if (s.oven && s.status !== "running" && s.oven.currentTempC > KITCHEN_TEMP_C) {
+      s.oven.currentTempC = Math.max(KITCHEN_TEMP_C, Math.round(s.oven.currentTempC - 5 * minutesPerTick));
     }
 
     s.powerW = powerFor(appliance);
@@ -253,15 +272,22 @@ export function createMockHome(options: MockHomeOptions = {}): MockHome {
     try {
       check = buildCommand(appliance, command, request.source, request.memberId);
     } catch {
-      throw problem(422, "Invalid command value");
+      throw problem(422, "Geçersiz komut değeri", "invalid_value");
     }
-    if (!check.ok) throw problem(422, check.reason === "unsupported" ? "Command not supported" : "Value out of range");
+    if (!check.ok) {
+      throw check.reason === "unsupported"
+        ? problem(422, "Komut desteklenmiyor", "command_not_supported")
+        : problem(422, "Değer izin verilen aralığın dışında", "value_out_of_range");
+    }
     apply(appliance, command);
     broadcast(appliance);
     return { commandId: `mock-${String(Date.now())}`, accepted: true, appliance: clone(appliance) };
   }
 
-  function telemetry(id: string, fromUtc: Date, toUtc: Date): TelemetryPoint[] {
+  /** Last 24 hours of (fake) history ending now, like the backend without a range. */
+  function telemetry(id: string): TelemetryPoint[] {
+    const toUtc = now();
+    const fromUtc = new Date(toUtc.getTime() - 24 * 60 * 60 * 1000);
     const appliance = find(id);
     if (!appliance) throw problem(404, "Appliance not found");
     const points: TelemetryPoint[] = [];
@@ -294,7 +320,7 @@ export function createMockHome(options: MockHomeOptions = {}): MockHome {
         return clone(appliance);
       }, opts?.signal),
     sendCommand: (id, request, opts) => delay(() => sendCommand(id, request), opts?.signal),
-    getTelemetry: (id, from, to, opts) => delay(() => telemetry(id, from, to), opts?.signal),
+    getTelemetry: (id, opts) => delay(() => telemetry(id), opts?.signal),
   };
 
   const connectLive: ConnectLive = (homeId, handlers) => {

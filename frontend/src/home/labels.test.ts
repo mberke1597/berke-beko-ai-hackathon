@@ -64,12 +64,17 @@ describe("stateTone and card summary", () => {
     const ac = appliance("ac-yatak");
     expect(stateTone(ac)).toBe("off");
     expect(cardSummary(ac).primary).toBe(tr.home.status.off);
-    expect(cardSummary(ac).secondary).toBe("Oda 26,1° · %50");
+    expect(cardSummary(ac).secondary).toBe("Oda 27,5° · %58");
   });
 
-  it("shows program, remaining time and progress for a running dishwasher", () => {
+  it("shows program, remaining time and progress for a running washer", () => {
+    expect(cardSummary(appliance("washer-1"))).toEqual({ primary: "Pamuklu 40 · 42 dk", secondary: "42 dk kaldı", progressPct: 65 });
+  });
+
+  it("shows an idle dishwasher as ready with its selected program", () => {
     const dw = appliance("dishwasher-1");
-    expect(cardSummary(dw)).toEqual({ primary: "Eko 50 · 42 dk", secondary: "42 dk kaldı", progressPct: 60 });
+    expect(stateTone(dw)).toBe("idle");
+    expect(cardSummary(dw)).toEqual({ primary: tr.home.status.idle, secondary: "Eko 50", progressPct: undefined });
   });
 
   it("does not repeat the temperature in the program name", () => {
