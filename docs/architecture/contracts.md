@@ -133,6 +133,7 @@ Design: `Planning/Celiknaz.md` §6, UI: `Planning/Celiknaz-UI.md`. Until auth ex
 - `state.oven`: `{ "mode": "conventional|fan|grill", "targetTempC": 180, "currentTempC": 120, "timerMin": 30 }`.
 - `state.fridge`: `{ "fridgeTempC": 4, "freezerTempC": -18, "doorOpen": false }`.
 - Exactly the sub-object for the appliance's type is non-null. Washer/dishwasher always have `state.program`: when idle it holds the selected program at full duration with `progressPct` 0, and `status` tells whether it runs.
+- Oven `timerMin` is `0` when no timer is set.
 - Oven target temperature uses `capabilities.setpoint` (`{ "min": 50, "max": 250, "step": 5 }`); oven `capabilities.modes` are `conventional`, `fan`, `grill`.
 - **Simulated time**: `state.updatedAtUtc`, telemetry `tsUtc` and `DeviceEvent.atUtc` are simulator time (starts at real time, runs `TimeScale`× faster). Mongo `device_events.atUtc` is real time. Clients must not compare simulator timestamps with the browser clock.
 - Rounding of visible state: 0.1 °C, 1 % humidity, 1 % progress, whole minutes (remaining, oven timer), 10 W power.
