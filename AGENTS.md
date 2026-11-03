@@ -14,7 +14,7 @@ Single source of rules for every developer and AI agent working in this reposito
 | `frontend/` | Vite + TypeScript app, no UI framework | frontend |
 | `deploy/docker/`, `deploy/kubernetes/` | Dockerfiles (linux/arm64), k3s manifests | infra |
 | `monitoring/` | OTel Collector, Prometheus, Tempo, Loki, Grafana provisioning | infra |
-| `.github/workflows/`, `compose.yml`, `Makefile`, `.env.example` | CI/CD, local stack, commands | infra |
+| `.github/workflows/`, `compose.yml`, `Makefile`, `.env.example`, `docs/deployment/` | CI/CD, local stack, commands, server setup guide | infra |
 | `docs/`, `AGENTS.md`, `CLAUDE.md`, `Planning/` | documentation, contracts, plans | lead |
 
 Never edit files owned by someone else. If you need a change there, say so in your report.
@@ -54,7 +54,7 @@ Never edit files owned by someone else. If you need a change there, say so in yo
 
 ## Commands
 
-All commands run from the repo root through the `Makefile`:
+All commands run from the repo root through the `Makefile` (GNU make; on Windows without make, run the underlying commands listed in the Makefile):
 
 | Command | What it does |
 |---|---|
