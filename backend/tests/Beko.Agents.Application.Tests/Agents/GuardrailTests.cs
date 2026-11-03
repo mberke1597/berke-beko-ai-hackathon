@@ -3,6 +3,8 @@ using Beko.Agents.Application.Agents.Llm;
 using Beko.Agents.Application.Agents.Runs;
 using Beko.Agents.Domain.Agents;
 
+using Beko.Agents.TestSupport;
+
 namespace Beko.Agents.Application.Tests.Agents;
 
 public sealed class PiiDetectorTests

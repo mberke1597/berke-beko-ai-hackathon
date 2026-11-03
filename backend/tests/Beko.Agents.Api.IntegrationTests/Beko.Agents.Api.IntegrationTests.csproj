@@ -7,11 +7,13 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Beko.Agents.Api\Beko.Agents.Api.csproj" />
+    <ProjectReference Include="..\Beko.Agents.TestSupport\Beko.Agents.TestSupport.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="xunit.v3" />
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" />
   </ItemGroup>
 
   <ItemGroup>

@@ -6,6 +6,8 @@ using Beko.Agents.Application.Agents.Workflow;
 using Beko.Agents.Domain.Agents;
 using Beko.Agents.Domain.Homes;
 
+using Beko.Agents.TestSupport;
+
 namespace Beko.Agents.Application.Tests.Agents;
 
 [Collection("RunTelemetry")]
