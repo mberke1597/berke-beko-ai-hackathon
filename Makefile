@@ -1,27 +1,45 @@
 # Beko Agent Platform - developer commands (GNU make). Run from the repo root.
 # On Windows without make, run the command lines under each target by hand.
 
-.PHONY: help up down logs backend-run frontend-dev test backend-test frontend-test \
+.PHONY: help up infra down demo demo-stop logs backend-run frontend-dev test backend-test frontend-test \
         lint backend-lint frontend-lint build backend-build frontend-build images k8s-render
 
 PUBLIC_HOST ?= beko.example.test
 IMAGE_TAG   ?= latest
 
 help:
-	@echo "up | down | logs | backend-run | frontend-dev | test | lint | build | images | k8s-render"
+	@echo "demo | demo-stop | infra | up | down | logs | backend-run | frontend-dev | test | lint | build | images | k8s-render"
+
+## One-command local demo: infra in Docker, backend + frontend from source (see docs/development/local-demo.md)
+ifeq ($(OS),Windows_NT)
+demo:
+	powershell -NoProfile -ExecutionPolicy Bypass -File scripts/demo.ps1
+demo-stop:
+	powershell -NoProfile -ExecutionPolicy Bypass -File scripts/demo-stop.ps1
+else
+demo:
+	bash scripts/demo.sh
+demo-stop:
+	bash scripts/demo-stop.sh
+endif
 
 ## Local stack (Docker Compose). Needs .env (cp .env.example .env).
+## infra = databases + observability only; up = everything incl. built backend and frontend images.
+infra:
+	@test -f .env || { echo "Missing .env: cp .env.example .env and fill in values"; exit 1; }
+	docker compose up -d
+
 up:
 	@test -f .env || { echo "Missing .env: cp .env.example .env and fill in values"; exit 1; }
-	docker compose up -d --build
+	docker compose --profile full up -d --build
 
 down:
-	docker compose down
+	docker compose --profile full down
 
 logs:
-	docker compose logs -f --tail=100
+	docker compose --profile full logs -f --tail=100
 
-## Run apps locally (start postgres/mongodb first: docker compose up -d postgres mongodb)
+## Run apps locally. They need the database/OTLP settings from compose.yml: prefer `make demo`, which sets everything.
 backend-run:
 	cd backend && dotnet run --project src/Beko.Agents.Api --urls http://localhost:5080
 
