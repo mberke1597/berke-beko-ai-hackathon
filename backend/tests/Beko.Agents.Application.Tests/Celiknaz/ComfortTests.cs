@@ -1,6 +1,6 @@
 using System.Text.Json;
-using Beko.Agents.Application.Common;
 using Beko.Agents.Application.Comfort;
+using Beko.Agents.Application.Common;
 using Beko.Agents.Application.Homes;
 using Beko.Agents.Application.Learning;
 using Beko.Agents.Application.Settings;

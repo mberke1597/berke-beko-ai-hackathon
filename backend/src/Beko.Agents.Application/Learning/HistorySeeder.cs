@@ -1,6 +1,6 @@
 using System.Text.Json;
-using Beko.Agents.Application.Common;
 using Beko.Agents.Application.Comfort;
+using Beko.Agents.Application.Common;
 using Beko.Agents.Application.Energy;
 using Beko.Agents.Application.Homes;
 using Beko.Agents.Application.Settings;
@@ -40,7 +40,8 @@ public sealed class HistorySeeder(
         var rng = new Random(20260101);
         var nowUtc = timeProvider.GetUtcNow().UtcDateTime;
         var today = clock.ToLocal(nowUtc).Date;
-        var firstDay = today.AddDays(-weeks * 7);
+        var endDay = HomeTime.WeekStartLocal(today); // whole calendar weeks, ending last Sunday
+        var firstDay = endDay.AddDays(-weeks * 7);
         var written = 0;
 
         foreach (var member in new[] { "ayse", "mehmet" })
@@ -59,12 +60,25 @@ public sealed class HistorySeeder(
             written++;
         }
 
-        async Task Feedback(string member, double setpoint, double goodChance, double coldShare, DateTime atUtc, DateTime day)
+        // Deterministic accumulators (a rate r fires on every 1/r-th occasion) keep the weekly series smooth.
+        var accumulators = new Dictionary<string, double>(StringComparer.Ordinal);
+        bool Fires(string key, double chance)
+        {
+            accumulators.TryGetValue(key, out var acc);
+            acc += chance;
+            var fired = acc >= 1;
+            accumulators[key] = fired ? acc - 1 : acc;
+            return fired;
+        }
+
+        async Task Feedback(string member, double setpoint, double wanted, double defaultDirection, DateTime atUtc, DateTime day)
         {
             var season = HomeContextService.SeasonOf(day);
             var clo = ComfortEngine.Clo(season, "normal");
             var pmv = ComfortEngine.Calculate(setpoint, 55, ComfortEngine.AirSpeedMs("auto", true), ComfortEngine.MetForHour(19), clo).Pmv;
-            var sensation = rng.NextDouble() < goodChance ? 0 : rng.NextDouble() < coldShare ? -1 : 1;
+            var gap = setpoint - wanted;
+            var bad = Fires("bad-" + member, Math.Clamp(0.1 + (0.4 * Math.Abs(gap)), 0.05, 0.9));
+            var sensation = !bad ? 0 : gap < 0 ? -1 : gap > 0 ? 1 : (int)defaultDirection;
             await feedbackStore.AddAsync(
                 new ComfortFeedbackRecord(Guid.NewGuid().ToString("N"), DemoHome.HomeId, member, Salon, sensation, null, null, setpoint, 55, Math.Round(pmv, 3), clo, atUtc, null, null),
                 cancellationToken);
@@ -76,24 +90,21 @@ public sealed class HistorySeeder(
         double RealGapMin() => (5 + (rng.NextDouble() * 10)) / clock.TimeScale;
 
         // One AI decision followed (sometimes) by the member's override and the comfort answer.
-        async Task AiDecision(string member, DateTime day, double minute, double aiSetpoint, double wanted, double p, double coldShare)
+        async Task AiDecision(string member, DateTime day, double minute, double aiSetpoint, double wanted, double defaultDirection)
         {
             var aiAt = Utc(day, minute);
             await Event("ai", member, "setpoint", aiSetpoint, aiSetpoint, true, aiAt);
             var overrideChance = Math.Clamp(0.12 + (0.35 * Math.Abs(wanted - aiSetpoint)), 0.1, 0.8);
-            var overridden = rng.NextDouble() < overrideChance;
-            var effective = aiSetpoint;
+            var overridden = Fires("override-" + member, overrideChance);
             if (overridden)
             {
-                effective = wanted;
                 await Event(UserSource(), member, "setpoint", wanted, wanted, true, aiAt.AddMinutes(RealGapMin()));
             }
 
-            var good = Math.Clamp(0.35 + (0.55 * p) + (overridden ? 0.2 : 0), 0, 0.95);
-            await Feedback(member, effective, good, coldShare, aiAt.AddMinutes(3), day);
+            await Feedback(member, aiSetpoint, wanted, defaultDirection, aiAt.AddMinutes(3), day);
         }
 
-        for (var day = firstDay; day < today; day = day.AddDays(1))
+        for (var day = firstDay; day < endDay; day = day.AddDays(1))
         {
             var week = (int)((day - firstDay).TotalDays / 7);
             var p = weeks > 1 ? week / (weeks - 1.0) : 1.0;
@@ -106,10 +117,7 @@ public sealed class HistorySeeder(
                 {
                     var on = 18 * 60 + 30 + Gauss(8);
                     await Event(UserSource(), "ayse", "power", true, 25, true, Utc(day, on));
-                    if (rng.NextDouble() < 0.85)
-                    {
-                        await AiDecision("ayse", day, on + 2, Math.Round((24 + (2 * p)) * 2) / 2, 26, p, 0.85);
-                    }
+                    await AiDecision("ayse", day, on + 2, Math.Round((24 + (2 * p)) * 2) / 2, 26, -1);
                 }
 
                 if (rng.NextDouble() < 0.85)
@@ -119,14 +127,14 @@ public sealed class HistorySeeder(
 
                 // Mehmet: 20:00 on, prefers 23. Fridays he works from home and turns it on at 10:30.
                 var mehmetOn = day.DayOfWeek == DayOfWeek.Friday ? (10 * 60) + 30 : 20 * 60;
-                if (rng.NextDouble() < (day.DayOfWeek == DayOfWeek.Friday ? 0.8 : 0.85))
+                if (rng.NextDouble() < (day.DayOfWeek == DayOfWeek.Friday ? 0.8 : 0.95))
                 {
                     var at = mehmetOn + Gauss(10);
                     await Event("app", "mehmet", "power", true, 23, true, Utc(day, at));
                     await Event("app", "mehmet", "setpoint", 23, 23, true, Utc(day, at + 1));
-                    if (day.DayOfWeek != DayOfWeek.Friday && rng.NextDouble() < 0.8)
+                    if (day.DayOfWeek != DayOfWeek.Friday)
                     {
-                        await AiDecision("mehmet", day, at + 10, Math.Round((25 - (2 * p)) * 2) / 2, 23, p, 0.2);
+                        await AiDecision("mehmet", day, at + 10, Math.Round((25 - (2 * p)) * 2) / 2, 23, 1);
                     }
                 }
             }

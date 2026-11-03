@@ -1,6 +1,6 @@
 using Beko.Agents.Application;
-using Beko.Agents.Application.Common;
 using Beko.Agents.Application.Comfort;
+using Beko.Agents.Application.Common;
 using Beko.Agents.Application.Energy;
 using Beko.Agents.Application.Homes;
 using Beko.Agents.Application.Learning;
@@ -52,16 +52,11 @@ internal sealed class AiCommandSender(IServiceScopeFactory scopes) : IAiCommandS
 
 /// <summary>
 /// Every <c>TickSeconds</c> (real time): polls presence, samples appliance power into the energy tracker, fires due comfort questions
-/// and runs accepted routines. Disabled with <c>CeliknazHome:RunBackgroundJobs=false</c> (tests).
+/// and runs accepted routines. Disabled with <c>CeliknazHome:RunBackgroundJobs=false</c> (tests). The services are resolved lazily,
+/// after the first tick, because they reach HomeWhiz (an HTTP call to this very host) and must not be built while the host starts.
 /// </summary>
 internal sealed partial class CeliknazTicker(
-    IServiceScopeFactory scopes,
-    PresenceService presence,
-    EnergyTracker energy,
-    PresenceStore presenceStore,
-    HomeDirectory directory,
-    ComfortCheckScheduler comfortChecks,
-    RoutineScheduler routines,
+    IServiceProvider services,
     IOptions<SimulationOptions> simulation,
     IConfiguration configuration,
     TimeProvider timeProvider,
@@ -77,16 +72,16 @@ internal sealed partial class CeliknazTicker(
         using var timer = new PeriodicTimer(TimeSpan.FromSeconds(simulation.Value.TickSeconds), timeProvider);
         while (await timer.WaitForNextTickAsync(stoppingToken))
         {
-            await RunAsync("presence", () => presence.PollAsync(stoppingToken));
+            await RunAsync("presence", () => services.GetRequiredService<PresenceService>().PollAsync(stoppingToken));
             await RunAsync("energy", () => SampleEnergyAsync(stoppingToken));
-            await RunAsync("comfort checks", () => comfortChecks.ProcessDueAsync(stoppingToken));
-            await RunAsync("routines", () => routines.ProcessDueAsync(stoppingToken));
+            await RunAsync("comfort checks", () => services.GetRequiredService<ComfortCheckScheduler>().ProcessDueAsync(stoppingToken));
+            await RunAsync("routines", () => services.GetRequiredService<RoutineScheduler>().ProcessDueAsync(stoppingToken));
         }
     }
 
     private async Task SampleEnergyAsync(CancellationToken cancellationToken)
     {
-        await using var scope = scopes.CreateAsyncScope();
+        await using var scope = services.CreateAsyncScope();
         var homeWhiz = scope.ServiceProvider.GetRequiredService<IHomeWhizClient>();
         var appliances = await homeWhiz.GetAppliancesAsync(DemoHome.HomeId, cancellationToken);
         if (appliances is null)
@@ -94,8 +89,9 @@ internal sealed partial class CeliknazTicker(
             return;
         }
 
-        var members = await directory.MemberIdsAsync(cancellationToken);
-        energy.RecordSample(appliances, members.All(m => presenceStore.Band(m) == PresenceBands.Away));
+        var members = await services.GetRequiredService<HomeDirectory>().MemberIdsAsync(cancellationToken);
+        var presence = services.GetRequiredService<PresenceStore>();
+        services.GetRequiredService<EnergyTracker>().RecordSample(appliances, members.All(m => presence.Band(m) == PresenceBands.Away));
     }
 
     private async Task RunAsync(string job, Func<Task> action)
@@ -116,7 +112,7 @@ internal sealed partial class CeliknazTicker(
 
 /// <summary>Runs <see cref="PatternLearner"/> shortly after start and then hourly.</summary>
 internal sealed partial class PatternLearnerService(
-    PatternLearner learner,
+    IServiceProvider services,
     IConfiguration configuration,
     TimeProvider timeProvider,
     ILogger<PatternLearnerService> logger) : BackgroundService
@@ -134,7 +130,7 @@ internal sealed partial class PatternLearnerService(
         {
             try
             {
-                await learner.RunAllAsync(stoppingToken);
+                await services.GetRequiredService<PatternLearner>().RunAllAsync(stoppingToken);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {

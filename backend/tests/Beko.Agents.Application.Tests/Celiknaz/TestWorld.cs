@@ -1,7 +1,7 @@
 using System.Collections.Concurrent;
 using System.Text.Json;
-using Beko.Agents.Application.Common;
 using Beko.Agents.Application.Comfort;
+using Beko.Agents.Application.Common;
 using Beko.Agents.Application.Energy;
 using Beko.Agents.Application.Homes;
 using Beko.Agents.Application.Learning;
