@@ -1,6 +1,11 @@
 name: Deploy
 
-# main deploys to production (k3s on the Oracle VM). Setup: docs/deployment/oracle-k3s.md.
+# main deploys to production (k3s on a single Linux VM). Setup: docs/deployment/azure-k3s.md.
+#
+# Repository variables (optional):
+#   IMAGE_PLATFORM  linux/arm64 (default, native ubuntu-24.04-arm runners) or linux/amd64
+#   PUBLIC_HOST     public host name for TLS; default: DEPLOY_HOST if it is a host name,
+#                   <DEPLOY_HOST>.sslip.io if it is an IPv4 address
 on:
   push:
     branches: [main]
@@ -15,11 +20,13 @@ concurrency:
 
 env:
   IMAGE_PREFIX: ghcr.io/mberke1597
+  IMAGE_PLATFORM: ${{ vars.IMAGE_PLATFORM || 'linux/arm64' }}
 
 jobs:
   build:
-    name: Build and push ${{ matrix.component }} (linux/arm64)
-    runs-on: ubuntu-24.04-arm   # native ARM runner, no QEMU
+    name: Build and push ${{ matrix.component }} (${{ vars.IMAGE_PLATFORM || 'linux/arm64' }})
+    # Native runner for the target architecture, no QEMU.
+    runs-on: ${{ vars.IMAGE_PLATFORM == 'linux/amd64' && 'ubuntu-24.04' || 'ubuntu-24.04-arm' }}
     permissions:
       contents: read
       packages: write
@@ -41,7 +48,7 @@ jobs:
         with:
           context: .
           file: deploy/docker/${{ matrix.component }}.Dockerfile
-          platforms: linux/arm64
+          platforms: ${{ env.IMAGE_PLATFORM }}
           push: true
           tags: |
             ${{ env.IMAGE_PREFIX }}/beko-${{ matrix.component }}:${{ github.sha }}
@@ -49,8 +56,8 @@ jobs:
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
-          cache-from: type=gha,scope=${{ matrix.component }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.component }}
+          cache-from: type=gha,scope=${{ matrix.component }}-${{ vars.IMAGE_PLATFORM == 'linux/amd64' && 'amd64' || 'arm64' }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.component }}-${{ vars.IMAGE_PLATFORM == 'linux/amd64' && 'amd64' || 'arm64' }}
 
   deploy:
     name: Deploy to k3s
@@ -63,6 +70,21 @@ jobs:
       DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
     steps:
       - uses: actions/checkout@v7
+
+      - name: Resolve public host
+        env:
+          PUBLIC_HOST_VAR: ${{ vars.PUBLIC_HOST }}
+        run: |
+          host="${PUBLIC_HOST_VAR}"
+          if [ -z "$host" ]; then
+            if [[ "$DEPLOY_HOST" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              host="${DEPLOY_HOST}.sslip.io"   # fallback when only an IP is known
+            else
+              host="${DEPLOY_HOST}"            # e.g. <label>.<region>.cloudapp.azure.com
+            fi
+          fi
+          echo "PUBLIC_HOST=${host}" >> "$GITHUB_ENV"
+          echo "Public URL: https://${host}"
 
       - name: Check required secrets
         env:
@@ -82,10 +104,6 @@ jobs:
 
       - name: Render manifests
         run: |
-          # PUBLIC_HOST: repository variable, or <DEPLOY_HOST>.sslip.io when DEPLOY_HOST is an IP.
-          PUBLIC_HOST="${{ vars.PUBLIC_HOST }}"
-          export PUBLIC_HOST="${PUBLIC_HOST:-${DEPLOY_HOST}.sslip.io}"
-          echo "Public URL: https://${PUBLIC_HOST}"
           mkdir -p out
           # shellcheck disable=SC2016  # envsubst wants the literal variable names
           kubectl kustomize --load-restrictor LoadRestrictionsNone deploy/kubernetes \
@@ -165,8 +183,6 @@ jobs:
 
       - name: Smoke test
         run: |
-          PUBLIC_HOST="${{ vars.PUBLIC_HOST }}"
-          PUBLIC_HOST="${PUBLIC_HOST:-${DEPLOY_HOST}.sslip.io}"
           # -k: the first Let's Encrypt certificate can take a minute after the first deploy.
           for _ in $(seq 1 12); do
             if curl -fsSk "https://${PUBLIC_HOST}/api/version"; then echo; exit 0; fi
