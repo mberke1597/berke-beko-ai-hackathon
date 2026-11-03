@@ -4,7 +4,7 @@
 .PHONY: help up down logs backend-run frontend-dev test backend-test frontend-test \
         lint backend-lint frontend-lint build backend-build frontend-build images k8s-render
 
-PUBLIC_HOST ?= 127.0.0.1.sslip.io
+PUBLIC_HOST ?= beko.example.test
 IMAGE_TAG   ?= latest
 
 help:

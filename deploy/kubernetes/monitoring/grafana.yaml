@@ -52,7 +52,7 @@ spec:
               value: "false"
           ports:
             - containerPort: 3000
-          # First start runs DB migrations and plugin installs before listening (minutes on 2 OCPU).
+          # First start runs DB migrations and plugin installs before listening (can take minutes on a small VM).
           startupProbe:
             httpGet:
               path: /grafana/api/health

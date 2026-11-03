@@ -1,4 +1,5 @@
-# Traefik (built into k3s) + cert-manager TLS for ${PUBLIC_HOST} (e.g. 1.2.3.4.sslip.io).
+# Traefik (built into k3s) + cert-manager TLS for ${PUBLIC_HOST} (e.g. beko-demo.swedencentral.cloudapp.azure.com,
+# or <public-ip>.sslip.io as a fallback).
 # Routing per docs/architecture/contracts.md.
 apiVersion: traefik.io/v1alpha1
 kind: Middleware

@@ -4,7 +4,7 @@
 # then substitute the two placeholders ${PUBLIC_HOST} and ${IMAGE_TAG}:
 #
 #   kubectl kustomize --load-restrictor LoadRestrictionsNone deploy/kubernetes \
-#     | PUBLIC_HOST=1.2.3.4.sslip.io IMAGE_TAG=<git-sha> envsubst '${PUBLIC_HOST} ${IMAGE_TAG}' \
+#     | PUBLIC_HOST=beko-demo.swedencentral.cloudapp.azure.com IMAGE_TAG=<git-sha> envsubst '${PUBLIC_HOST} ${IMAGE_TAG}' \
 #     | kubectl apply -f -
 #
 # Secrets are NOT part of this kustomization: see secrets.template.yaml (deploy.yml creates them).

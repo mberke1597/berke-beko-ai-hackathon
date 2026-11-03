@@ -40,7 +40,7 @@ spec:
                 secretKeyRef:
                   name: beko-secrets
                   key: MONGO_PASSWORD
-          # TCP probes: an exec'd mongosh costs ~100 MB and noticeable CPU on 2 OCPU.
+          # TCP probes: an exec'd mongosh costs ~100 MB and noticeable CPU on a small VM.
           readinessProbe:
             tcpSocket:
               port: 27017

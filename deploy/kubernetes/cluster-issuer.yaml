@@ -1,5 +1,5 @@
 # Cluster-scoped Let's Encrypt issuers (HTTP-01 through Traefik). Applied separately from the
-# kustomization because it needs the cert-manager CRDs installed first (docs/deployment/oracle-k3s.md).
+# kustomization because it needs the cert-manager CRDs installed first (docs/deployment/azure-k3s.md).
 # If you hit Let's Encrypt rate limits while testing, switch the Ingress annotation to letsencrypt-staging.
 apiVersion: cert-manager.io/v1
 kind: ClusterIssuer
