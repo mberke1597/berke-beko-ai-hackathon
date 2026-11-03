@@ -1,3 +1,4 @@
+using Beko.Agents.Application.Common;
 using Beko.Agents.Application.Homes;
 using Beko.Agents.Application.Options;
 using Microsoft.Extensions.Hosting;
@@ -15,7 +16,8 @@ public sealed partial class DeviceSimulator(
     IDeviceNotifier notifier,
     IOptions<SimulationOptions> options,
     TimeProvider timeProvider,
-    ILogger<DeviceSimulator> logger) : BackgroundService
+    ILogger<DeviceSimulator> logger,
+    IEnumerable<IApplianceEventObserver>? eventObservers = null) : BackgroundService
 {
     /// <summary>Runs one simulation step and publishes its results.</summary>
     public async Task TickOnceAsync(CancellationToken cancellationToken)
@@ -29,6 +31,17 @@ public sealed partial class DeviceSimulator(
         foreach (var applianceEvent in result.Events)
         {
             await notifier.ApplianceEventAsync(applianceEvent.HomeId, applianceEvent.ApplianceId, applianceEvent.Event, applianceEvent.AtUtc, cancellationToken);
+            foreach (var observer in eventObservers ?? [])
+            {
+                try
+                {
+                    await observer.OnApplianceEventAsync(applianceEvent.HomeId, applianceEvent.ApplianceId, applianceEvent.Event, applianceEvent.AtUtc, cancellationToken);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    LogObserverFailed(logger, ex, observer.GetType().Name);
+                }
+            }
         }
     }
 
@@ -47,6 +60,9 @@ public sealed partial class DeviceSimulator(
             }
         }
     }
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Appliance event observer {Observer} failed")]
+    private static partial void LogObserverFailed(ILogger logger, Exception exception, string observer);
 
     [LoggerMessage(Level = LogLevel.Error, Message = "Device simulator tick failed")]
     private static partial void LogTickFailed(ILogger logger, Exception exception);
