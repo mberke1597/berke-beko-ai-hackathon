@@ -8,7 +8,9 @@
   },
   "scripts": {
     "dev": "vite",
+    "dev:mock": "vite --mode mock",
     "build": "tsc --noEmit && vite build",
+    "build:mock": "tsc --noEmit && vite build --mode mock",
     "preview": "vite preview",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
@@ -22,5 +24,8 @@
     "typescript-eslint": "8.72.1",
     "vite": "8.3.5",
     "vitest": "5.1.0"
+  },
+  "dependencies": {
+    "@microsoft/signalr": "10.0.11"
   }
 }

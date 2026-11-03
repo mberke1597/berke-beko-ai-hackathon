@@ -11,6 +11,7 @@ export interface RequestOptions {
 
 export interface ApiClient {
   get<T>(path: string, decode: Decoder<T>, options?: RequestOptions): Promise<T>;
+  post<T>(path: string, body: unknown, decode: Decoder<T>, options?: RequestOptions): Promise<T>;
 }
 
 function isJson(response: Response): boolean {
@@ -29,10 +30,21 @@ async function readJson(response: Response): Promise<unknown> {
 
 /** Creates a small typed fetch client. `fetchFn` is injectable for tests. */
 export function createApiClient(fetchFn: FetchFn = (input, init) => fetch(input, init)): ApiClient {
-  async function request<T>(method: string, path: string, decode: Decoder<T>, options: RequestOptions = {}): Promise<T> {
+  async function request<T>(
+    method: string,
+    path: string,
+    decode: Decoder<T>,
+    options: RequestOptions = {},
+    requestBody?: unknown,
+  ): Promise<T> {
     let response: Response;
     try {
-      const init: RequestInit = { method, headers: { Accept: "application/json" } };
+      const headers: Record<string, string> = { Accept: "application/json" };
+      const init: RequestInit = { method, headers };
+      if (requestBody !== undefined) {
+        headers["Content-Type"] = "application/json";
+        init.body = JSON.stringify(requestBody);
+      }
       if (options.signal) init.signal = options.signal;
       response = await fetchFn(path, init);
     } catch (error) {
@@ -54,6 +66,7 @@ export function createApiClient(fetchFn: FetchFn = (input, init) => fetch(input,
 
   return {
     get: (path, decode, options) => request("GET", path, decode, options),
+    post: (path, body, decode, options) => request("POST", path, decode, options, body),
   };
 }
 
