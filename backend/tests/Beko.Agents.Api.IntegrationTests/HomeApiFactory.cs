@@ -12,7 +12,7 @@ namespace Beko.Agents.Api.IntegrationTests;
 /// Test host where <see cref="IHomeWhizClient"/> calls the mock HomeWhiz endpoints of the same in-memory server
 /// and device events go to memory instead of MongoDB.
 /// </summary>
-public sealed class HomeApiFactory : WebApplicationFactory<Program>
+public class HomeApiFactory : WebApplicationFactory<Program>
 {
     public InMemoryDeviceEventStore Events { get; } = new();
 

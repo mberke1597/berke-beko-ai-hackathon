@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using Beko.Agents.Api.Hubs;
+using Beko.Agents.Application.Agents.Runs;
 using Beko.Agents.Application.Homes;
 using Beko.Agents.Infrastructure;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
@@ -14,9 +15,15 @@ builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddInfrastructure(builder.Configuration, builder.Environment);
 builder.Services.AddSignalR();
 builder.Services.AddSingleton<IDeviceNotifier, SignalRDeviceNotifier>();
-builder.Services.AddScoped<DeviceService>();
+builder.Services.AddSingleton<IRunNotifier, SignalRRunNotifier>();
 
 var app = builder.Build();
+
+// Development only: apply EF Core migrations on startup. Elsewhere run `dotnet ef database update` (see backend/README.md).
+if (app.Environment.IsDevelopment() && app.Configuration.GetValue("Database:MigrateOnStartup", true))
+{
+    await app.Services.MigrateDatabaseAsync();
+}
 
 app.UseExceptionHandler();
 app.UseStatusCodePages();
@@ -28,5 +35,6 @@ app.MapHealthChecks("/health/ready", new HealthCheckOptions
 });
 app.MapControllers();
 app.MapHub<DeviceHub>(DeviceHub.Path);
+app.MapHub<RunHub>(RunHub.Path);
 
 await app.RunAsync();
