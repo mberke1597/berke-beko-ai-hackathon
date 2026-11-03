@@ -206,10 +206,10 @@ Design: `Planning/Proposal.md` §1 and §3, `docs/diagrams/03-agent-run-sequence
 | `POST /api/conversations/{id}/messages` | `{ "text": "Ev soğudu, biraz ısıt", "channel": "voice\|text" }` → `202 { "runId", "traceId" }`; the run continues in the background and streams over `RunHub` |
 | `GET /api/runs/{runId}` | `{ "runId", "conversationId", "agentId", "workflowVersion", "status": "running\|completed\|failed", "traceId", "startedAtUtc", "durationMs", "totals": Totals, "steps": [Step] }` |
 
-- `Action`: `{ "applianceId", "command", "value", "accepted": true }`, one per `control_device` call.
+- `Action`: `{ "applianceId", "displayName", "command", "value", "accepted": true }`, one per `control_device` call (`accepted: false` when the device rejected it).
 - `Totals`: `{ "inputTokens", "outputTokens", "cacheReadTokens", "cacheWriteTokens", "costUsd", "durationMs" }`.
 - `Step`: `{ "stepId", "parentStepId", "type", "name", "status": "pending\|running\|completed\|failed", "startedAtUtc", "durationMs", "tokens": { "input", "output" } | null, "costUsd", "summary", "spanId" }`. `type` is one of the workflow step types plus `llm.call` and `tool.call` children under `agent.llm`. `summary` is a short human-readable line (tool name + key args, or model + stop reason).
-- Errors: problem+json. LLM failure → run `failed`, a `StepFailed` event, and a Turkish fallback answer "Şu anda yanıt veremiyorum, lütfen tekrar deneyin."
+- Errors: problem+json. LLM failure → run `failed`, a `StepFailed` event, and then **always** a `RunCompleted` whose `text` is the Turkish fallback "Şu anda yanıt veremiyorum, lütfen tekrar deneyin." (stored as the assistant message). Every run ends with exactly one `RunCompleted`.
 
 ### SignalR `RunHub` — `/hubs/runs`
 - Client → server: `JoinConversation(conversationId)`.
