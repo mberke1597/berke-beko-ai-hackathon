@@ -12,7 +12,7 @@ export interface CardHandlers {
 }
 
 /** Appliance card: icon, name, key state, status (text + icon + colour) and a quick power toggle. */
-export function createApplianceCard(appliance: Appliance, handlers: CardHandlers): HTMLElement {
+export function createApplianceCard(appliance: Appliance, handlers: CardHandlers, aiChanged = false): HTMLElement {
   const tone = stateTone(appliance);
   const summary = cardSummary(appliance);
   const status = toneLabel(appliance);
@@ -42,6 +42,7 @@ export function createApplianceCard(appliance: Appliance, handlers: CardHandlers
     },
     [
       el("span", { class: "appliance-card__icon" }, [icon(applianceIconName(appliance.type), "icon icon--lg")]),
+      aiChanged && el("span", { class: "appliance-card__ai" }, [icon("sparkle", "icon icon--xs"), tr.home.chat.aiTag]),
       el("span", { class: "appliance-card__name" }, [appliance.displayName]),
       el("span", { class: "appliance-card__primary" }, [summary.primary]),
       summary.secondary !== undefined && el("span", { class: "appliance-card__secondary" }, [summary.secondary]),

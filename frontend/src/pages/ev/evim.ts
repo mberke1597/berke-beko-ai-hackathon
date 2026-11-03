@@ -74,7 +74,7 @@ export function renderEvim(main: HTMLElement, session: HomeSession): () => void 
                   "div",
                   { class: "ev-grid" },
                   appliances.map((appliance) => {
-                    const card = createApplianceCard(appliance, handlers);
+                    const card = createApplianceCard(appliance, handlers, session.store.isAiChanged(appliance.id));
                     cards.set(appliance.id, card);
                     return card;
                   }),
@@ -105,18 +105,20 @@ export function renderEvim(main: HTMLElement, session: HomeSession): () => void 
 
     unsubscribe?.();
     unsubscribe = session.store.subscribe((change) => {
-      if (change.kind === "appliance") {
-        const old = cards.get(change.appliance.id);
-        if (old) {
-          const next = createApplianceCard(change.appliance, handlers);
+      if (change.kind === "appliance" || change.kind === "aiTag") {
+        const id = change.kind === "appliance" ? change.appliance.id : change.applianceId;
+        const appliance = change.kind === "appliance" ? change.appliance : session.store.getAppliance(id);
+        const old = cards.get(id);
+        if (old && appliance) {
+          const next = createApplianceCard(appliance, handlers, session.store.isAiChanged(id));
           // Keep keyboard focus on the same control after a live re-render.
           const focusPower = old.contains(document.activeElement) && document.activeElement?.classList.contains("appliance-card__power");
           const focusLink = old.contains(document.activeElement) && !focusPower;
           old.replaceWith(next);
-          cards.set(change.appliance.id, next);
+          cards.set(id, next);
           if (focusPower) next.querySelector<HTMLElement>(".appliance-card__power")?.focus();
           if (focusLink) next.querySelector<HTMLElement>(".appliance-card__link")?.focus();
-        } else if (session.store.home) {
+        } else if (!old && change.kind === "appliance" && session.store.home) {
           draw(session.store.home);
         }
       } else if (change.kind === "live") {
