@@ -6,6 +6,11 @@ export const paths = {
   evTasks: "/ev/gorevler",
   evAssistant: "/ev/asistan",
   evDevicePattern: "/ev/cihaz/:id",
+  evRules: "/ev/gorevler/kurallar",
+  evSettings: "/ev/ayarlar",
+  evNotifications: "/ev/bildirimler",
+  evLearning: "/ev/ogrendi",
+  panel: "/panel",
 } as const;
 
 /** Path of the appliance detail screen. */

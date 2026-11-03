@@ -26,3 +26,6 @@ Thumbs.db
 # Claude Code local files
 .claude/settings.local.json
 .claude/worktrees/
+
+# Local secrets (API keys); copy appsettings.Local.example.json to appsettings.Local.json
+appsettings.Local.json

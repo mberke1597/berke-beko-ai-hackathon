@@ -1,0 +1,195 @@
+name: Deploy
+
+# main deploys to production (k3s on a single Linux VM). Setup: docs/deployment/azure-k3s.md.
+#
+# Repository variables (optional):
+#   IMAGE_PLATFORM  linux/arm64 (default, native ubuntu-24.04-arm runners) or linux/amd64
+#   PUBLIC_HOST     public host name for TLS; default: DEPLOY_HOST if it is a host name,
+#                   <DEPLOY_HOST>.sslip.io if it is an IPv4 address
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+env:
+  IMAGE_PREFIX: ghcr.io/mberke1597
+  IMAGE_PLATFORM: ${{ vars.IMAGE_PLATFORM || 'linux/arm64' }}
+
+jobs:
+  build:
+    name: Build and push ${{ matrix.component }} (${{ vars.IMAGE_PLATFORM || 'linux/arm64' }})
+    # Native runner for the target architecture, no QEMU.
+    runs-on: ${{ vars.IMAGE_PLATFORM == 'linux/amd64' && 'ubuntu-24.04' || 'ubuntu-24.04-arm' }}
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        component: [backend, frontend]
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: deploy/docker/${{ matrix.component }}.Dockerfile
+          platforms: ${{ env.IMAGE_PLATFORM }}
+          push: true
+          tags: |
+            ${{ env.IMAGE_PREFIX }}/beko-${{ matrix.component }}:${{ github.sha }}
+            ${{ env.IMAGE_PREFIX }}/beko-${{ matrix.component }}:latest
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha,scope=${{ matrix.component }}-${{ vars.IMAGE_PLATFORM == 'linux/amd64' && 'amd64' || 'arm64' }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.component }}-${{ vars.IMAGE_PLATFORM == 'linux/amd64' && 'amd64' || 'arm64' }}
+
+  deploy:
+    name: Deploy to k3s
+    needs: build
+    runs-on: ubuntu-24.04
+    environment: production
+    env:
+      IMAGE_TAG: ${{ github.sha }}
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Resolve public host
+        env:
+          PUBLIC_HOST_VAR: ${{ vars.PUBLIC_HOST }}
+        run: |
+          host="${PUBLIC_HOST_VAR}"
+          if [ -z "$host" ]; then
+            if [[ "$DEPLOY_HOST" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              host="${DEPLOY_HOST}.sslip.io"   # fallback when only an IP is known
+            else
+              host="${DEPLOY_HOST}"            # e.g. <label>.<region>.cloudapp.azure.com
+            fi
+          fi
+          echo "PUBLIC_HOST=${host}" >> "$GITHUB_ENV"
+          echo "Public URL: https://${host}"
+
+      - name: Check required secrets
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          JWT_SIGNING_KEY: ${{ secrets.JWT_SIGNING_KEY }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          MONGO_PASSWORD: ${{ secrets.MONGO_PASSWORD }}
+          GRAFANA_ADMIN_PASSWORD: ${{ secrets.GRAFANA_ADMIN_PASSWORD }}
+        run: |
+          missing=0
+          for name in DEPLOY_HOST DEPLOY_USER DEPLOY_SSH_KEY ANTHROPIC_API_KEY JWT_SIGNING_KEY \
+                      POSTGRES_PASSWORD MONGO_PASSWORD GRAFANA_ADMIN_PASSWORD; do
+            if [ -z "${!name}" ]; then echo "::error::Missing GitHub secret $name"; missing=1; fi
+          done
+          exit $missing
+
+      - name: Render manifests
+        run: |
+          mkdir -p out
+          # shellcheck disable=SC2016  # envsubst wants the literal variable names
+          kubectl kustomize --load-restrictor LoadRestrictionsNone deploy/kubernetes \
+            | envsubst '${PUBLIC_HOST} ${IMAGE_TAG}' > out/app.yaml
+          cp deploy/kubernetes/cluster-issuer.yaml out/cluster-issuer.yaml
+          # shellcheck disable=SC2016
+          if grep -n '\${PUBLIC_HOST}\|\${IMAGE_TAG}' out/app.yaml; then
+            echo "::error::Unsubstituted placeholder"; exit 1
+          fi
+
+      - name: Render secrets
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          JWT_SIGNING_KEY: ${{ secrets.JWT_SIGNING_KEY }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          MONGO_PASSWORD: ${{ secrets.MONGO_PASSWORD }}
+          GRAFANA_ADMIN_PASSWORD: ${{ secrets.GRAFANA_ADMIN_PASSWORD }}
+          GHCR_PULL_TOKEN: ${{ secrets.GHCR_PULL_TOKEN }}
+          GHCR_PULL_USER: ${{ github.repository_owner }}
+        run: |
+          umask 077
+          {
+            echo "ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}"
+            echo "JWT_SIGNING_KEY=${JWT_SIGNING_KEY}"
+            echo "POSTGRES_PASSWORD=${POSTGRES_PASSWORD}"
+            echo "MONGO_PASSWORD=${MONGO_PASSWORD}"
+            echo "GRAFANA_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}"
+          } > out/secrets.env
+          kubectl create secret generic beko-secrets -n beko \
+            --from-env-file=out/secrets.env --dry-run=client -o yaml > out/secrets.yaml
+          rm out/secrets.env
+          # Optional: only needed while the GHCR packages are private (PAT with read:packages).
+          if [ -n "${GHCR_PULL_TOKEN}" ]; then
+            kubectl create secret docker-registry ghcr-pull -n beko \
+              --docker-server=ghcr.io --docker-username="${GHCR_PULL_USER}" \
+              --docker-password="${GHCR_PULL_TOKEN}" --dry-run=client -o yaml >> out/secrets.yaml
+          fi
+
+      - name: Configure SSH
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "${DEPLOY_SSH_KEY}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          if [ -n "${DEPLOY_KNOWN_HOSTS}" ]; then
+            printf '%s\n' "${DEPLOY_KNOWN_HOSTS}" > ~/.ssh/known_hosts
+          else
+            echo "::warning::DEPLOY_KNOWN_HOSTS not set, trusting the host key from ssh-keyscan"
+            ssh-keyscan -T 15 -t ed25519 "${DEPLOY_HOST}" > ~/.ssh/known_hosts
+          fi
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Apply to cluster
+        run: |
+          ssh_k() { ssh -o BatchMode=yes "${DEPLOY_USER}@${DEPLOY_HOST}" "$@"; }
+          ssh_k kubectl version
+          ssh_k kubectl apply -f - < out/cluster-issuer.yaml
+          ssh_k "kubectl create namespace beko --dry-run=client -o yaml | kubectl apply -f -"
+          ssh_k kubectl apply -f - < out/secrets.yaml
+          ssh_k kubectl apply -f - < out/app.yaml
+
+      - name: Wait for rollout
+        run: |
+          ssh_k() { ssh -o BatchMode=yes "${DEPLOY_USER}@${DEPLOY_HOST}" "$@"; }
+          for r in statefulset/postgres statefulset/mongodb deployment/otel-collector \
+                   deployment/backend deployment/frontend statefulset/grafana; do
+            ssh_k kubectl -n beko rollout status "$r" --timeout=300s || {
+              ssh_k kubectl -n beko get pods -o wide
+              ssh_k kubectl -n beko describe "$r" | tail -40
+              ssh_k kubectl -n beko logs "$r" --tail=80 || true
+              exit 1
+            }
+          done
+          ssh_k kubectl -n beko get pods,ingress,certificate
+
+      - name: Smoke test
+        run: |
+          # -k: the first Let's Encrypt certificate can take a minute after the first deploy.
+          for _ in $(seq 1 12); do
+            if curl -fsSk "https://${PUBLIC_HOST}/api/version"; then echo; exit 0; fi
+            sleep 10
+          done
+          echo "::error::https://${PUBLIC_HOST}/api/version did not answer"; exit 1
+
+      - name: Clean up
+        if: always()
+        run: rm -rf out ~/.ssh/id_ed25519

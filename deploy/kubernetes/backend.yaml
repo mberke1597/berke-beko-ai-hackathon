@@ -1,0 +1,102 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+spec:
+  selector:
+    app: backend
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+spec:
+  replicas: 1
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      app: backend
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      # Missing pull secret is non-fatal: public GHCR packages are pulled anonymously.
+      imagePullSecrets:
+        - name: ghcr-pull
+      containers:
+        - name: backend
+          image: ghcr.io/mberke1597/beko-backend:${IMAGE_TAG}
+          ports:
+            - name: http
+              containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: beko-config
+          env:
+            # Secret values first so $(VAR) expansion below can use them.
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: beko-secrets
+                  key: POSTGRES_PASSWORD
+            - name: MONGO_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: beko-secrets
+                  key: MONGO_PASSWORD
+            - name: Anthropic__ApiKey
+              valueFrom:
+                secretKeyRef:
+                  name: beko-secrets
+                  key: ANTHROPIC_API_KEY
+            - name: Jwt__SigningKey
+              valueFrom:
+                secretKeyRef:
+                  name: beko-secrets
+                  key: JWT_SIGNING_KEY
+            - name: ConnectionStrings__Postgres
+              value: Host=postgres;Database=beko;Username=beko;Password=$(POSTGRES_PASSWORD)
+            - name: Mongo__ConnectionString
+              value: mongodb://beko:$(MONGO_PASSWORD)@mongodb:27017/?authSource=admin
+            - name: App__Commit
+              value: "${IMAGE_TAG}"
+            # 512 MiB managed heap inside a 768 Mi container limit (hex bytes). Overrides the
+            # image's DOTNET_GCHeapHardLimitPercent.
+            - name: DOTNET_GCHeapHardLimit
+              value: "0x20000000"
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 5
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 20
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 200m
+              memory: 256Mi
+            limits:
+              memory: 768Mi

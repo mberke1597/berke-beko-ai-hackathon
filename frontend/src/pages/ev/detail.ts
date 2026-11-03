@@ -15,6 +15,7 @@ import { applianceIconName, icon, toneIconName, type IconName } from "../../home
 import {
   acModeLabel,
   fanLabel,
+  formatClock,
   formatDuration,
   formatNumber,
   formatPercent,
@@ -30,6 +31,7 @@ import { tr } from "../../i18n/tr.ts";
 import { paths } from "../../paths.ts";
 import { hrefFor } from "../../router.ts";
 import { createTelemetryChart } from "./chart.ts";
+import { createCheapestPanel, createComfortPanel, createEnergyPanel } from "./detail-extras.ts";
 import { loadHome, renderLoading } from "./common.ts";
 import { showToast } from "./toast.ts";
 
@@ -43,6 +45,8 @@ interface DetailState {
   oven: { mode: string; targetTempC: number; timerMin: number } | undefined;
   chart: HTMLElement;
 }
+
+const EXTRAS_REFRESH_MS = 1500;
 
 function tile(iconName: IconName, label: string, value: string): HTMLElement {
   return el("div", { class: "ev-tile" }, [
@@ -135,6 +139,9 @@ export function renderDetail(main: HTMLElement, session: HomeSession, id: string
     oven: undefined,
     chart: el("div", { class: "ev-chart-region" }),
   };
+  const energy = createEnergyPanel(session, id);
+  const comfort = createComfortPanel(session, id);
+  const cheapest = createCheapestPanel(session, (appliance, command) => send(appliance, command));
 
   const send = async (appliance: Appliance, command: DeviceCommand): Promise<boolean> => {
     const outcome = await sendDeviceCommand(session, appliance, command, state.remote ? "remote" : "app");
@@ -229,6 +236,7 @@ export function renderDetail(main: HTMLElement, session: HomeSession, id: string
         tile("drop", tr.home.detail.humidity, formatPercent(ac.humidityPct)),
         tile("power", tr.home.detail.powerDraw, tr.home.detail.watt(formatNumber(appliance.state.powerW))),
       ]),
+      comfort.element,
       section(tr.home.detail.mode, [
         segmented(tr.home.detail.mode, "mode", caps.modes, ac.mode, acModeLabel, off || !supportsCommand(appliance, "mode"), (mode) => {
           void send(appliance, { type: "mode", value: mode });
@@ -281,6 +289,11 @@ export function renderDetail(main: HTMLElement, session: HomeSession, id: string
       );
     }
 
+    const scheduledTime = p?.startAtUtc != null ? formatClock(p.startAtUtc) : "";
+    if (scheduledTime !== "") {
+      info.push(el("p", { class: "ev-comfort__conflict", role: "status" }, [icon("clock", "icon icon--xs"), tr.home.detail.scheduledAt(scheduledTime)]));
+    }
+
     let programPicker: HTMLElement;
     if (caps.programs.length === 0) {
       programPicker = el("p", { class: "ev-muted" }, [tr.home.detail.noPrograms]);
@@ -326,17 +339,14 @@ export function renderDetail(main: HTMLElement, session: HomeSession, id: string
       return button;
     });
 
-    const cheapest = el("button", { type: "button", class: "button button--ghost", disabled: true, "aria-describedby": "cheapest-hint" }, [
-      icon("leaf", "icon icon--sm"),
-      tr.home.detail.cheapest,
-    ]);
+    cheapest.update(appliance, state.program);
 
     return [
       ...info,
       section(tr.home.detail.program, [
         programPicker,
         el("div", { class: "ev-actions" }, buttons),
-        el("div", { class: "ev-cheapest" }, [cheapest, el("p", { id: "cheapest-hint", class: "ev-muted" }, [tr.home.detail.cheapestSoon])]),
+        cheapest.element,
       ], "program"),
     ];
   };
@@ -490,6 +500,7 @@ export function renderDetail(main: HTMLElement, session: HomeSession, id: string
           el("span", { class: "ev-detail__model" }, [`${tr.home.detail.model}: ${appliance.model}`]),
         ]),
         powerRow(appliance),
+        appliance.type === "refrigerator" ? null : energy.element,
         ...body,
       ]),
     );
@@ -505,7 +516,13 @@ export function renderDetail(main: HTMLElement, session: HomeSession, id: string
     const appliance = session.store.getAppliance(id);
     if (appliance) loadChart(appliance);
     unsubscribe = session.store.subscribe((change) => {
-      if ((change.kind === "appliance" && change.appliance.id === id) || change.kind === "home") draw();
+      if ((change.kind === "appliance" && change.appliance.id === id) || change.kind === "home") {
+        draw();
+        if (change.kind === "appliance") {
+          comfort.refresh();
+          energy.refresh(EXTRAS_REFRESH_MS * 2);
+        }
+      }
     });
   });
 
@@ -517,5 +534,7 @@ export function renderDetail(main: HTMLElement, session: HomeSession, id: string
     const current = session.store.getAppliance(id);
     if (pending !== undefined && current) void send(current, { type: "setpoint", value: pending });
     chartController?.abort();
+    comfort.dispose();
+    energy.dispose();
   };
 }
