@@ -1,7 +1,9 @@
-// Tiny hash router: "#/giris" -> "/giris". No framework, no dynamic segments yet.
+// Tiny hash router: "#/giris" -> "/giris". Supports static paths and ":param" segments ("/ev/cihaz/:id").
+
+export type RouteParams = Readonly<Record<string, string>>;
 
 /** Renders a route. May return a cleanup function, called before the next route renders. */
-export type RouteHandler = () => (() => void) | undefined;
+export type RouteHandler = (params: RouteParams) => (() => void) | undefined;
 
 /** Abstraction over `window.location.hash` so the router can be tested without a DOM. */
 export interface HashLocation {
@@ -43,6 +45,31 @@ export function normalizePath(hash: string): string {
 /** Builds an href for a route path, e.g. "/giris" -> "#/giris". */
 export function hrefFor(path: string): string {
   return `#${normalizePath(path)}`;
+}
+
+/**
+ * Matches a path against a pattern with ":name" segments.
+ * Returns the decoded params, or undefined when it does not match.
+ */
+export function matchPath(pattern: string, path: string): RouteParams | undefined {
+  const patternParts = pattern.split("/");
+  const pathParts = path.split("/");
+  if (patternParts.length !== pathParts.length) return undefined;
+  const params: Record<string, string> = {};
+  for (const [index, part] of patternParts.entries()) {
+    const actual = pathParts[index] ?? "";
+    if (part.startsWith(":")) {
+      if (actual === "") return undefined;
+      try {
+        params[part.slice(1)] = decodeURIComponent(actual);
+      } catch {
+        return undefined;
+      }
+    } else if (part !== actual) {
+      return undefined;
+    }
+  }
+  return params;
 }
 
 export class Router {
@@ -87,12 +114,25 @@ export class Router {
     this.location.setHash(target);
   }
 
+  private find(path: string): { handler: RouteHandler; params: RouteParams } | undefined {
+    if (Object.hasOwn(this.routes, path)) {
+      const handler = this.routes[path];
+      if (handler) return { handler, params: {} };
+    }
+    for (const [pattern, handler] of Object.entries(this.routes)) {
+      if (!pattern.includes(":")) continue;
+      const params = matchPath(pattern, path);
+      if (params) return { handler, params };
+    }
+    return undefined;
+  }
+
   private resolve(): void {
     const path = normalizePath(this.location.getHash());
     this.path = path;
     this.runCleanup();
-    const handler = Object.hasOwn(this.routes, path) ? this.routes[path] : undefined;
-    const result = (handler ?? this.notFound)();
+    const match = this.find(path);
+    const result = match ? match.handler(match.params) : this.notFound({});
     this.cleanup = typeof result === "function" ? result : undefined;
   }
 

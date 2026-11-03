@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { hrefFor, normalizePath, Router, type HashLocation } from "./router.ts";
+import { hrefFor, matchPath, normalizePath, Router, type HashLocation } from "./router.ts";
 
 function fakeLocation(initial = ""): HashLocation & { fire(): void } {
   let hash = initial;
@@ -76,5 +76,62 @@ describe("Router", () => {
     router.start();
     router.navigate("/");
     expect(home).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("matchPath", () => {
+  it("extracts params", () => {
+    expect(matchPath("/ev/cihaz/:id", "/ev/cihaz/ac-salon")).toEqual({ id: "ac-salon" });
+  });
+  it("decodes params", () => {
+    expect(matchPath("/ev/cihaz/:id", "/ev/cihaz/a%20b")).toEqual({ id: "a b" });
+  });
+  it.each([
+    ["/ev/cihaz/:id", "/ev/cihaz"],
+    ["/ev/cihaz/:id", "/ev/cihaz/x/y"],
+    ["/ev/cihaz/:id", "/ev/oda/x"],
+    ["/ev/cihaz/:id", "/ev/cihaz/%E0%A4%A"],
+  ])("%s does not match %s", (pattern, path) => {
+    expect(matchPath(pattern, path)).toBeUndefined();
+  });
+});
+
+describe("Router with home routes", () => {
+  it("routes the Çeliknaz tabs and appliance detail", () => {
+    const evim = vi.fn();
+    const tasks = vi.fn();
+    const assistant = vi.fn();
+    const detail = vi.fn();
+    const location = fakeLocation("#/ev");
+    const router = new Router({
+      routes: {
+        "/ev": evim,
+        "/ev/gorevler": tasks,
+        "/ev/asistan": assistant,
+        "/ev/cihaz/:id": detail,
+      },
+      notFound: vi.fn(),
+      location,
+    });
+    router.start();
+    expect(evim).toHaveBeenCalledWith({});
+    router.navigate("/ev/gorevler");
+    expect(tasks).toHaveBeenCalledTimes(1);
+    router.navigate("/ev/asistan/");
+    expect(assistant).toHaveBeenCalledTimes(1);
+    router.navigate("/ev/cihaz/washer-1");
+    expect(detail).toHaveBeenCalledWith({ id: "washer-1" });
+  });
+
+  it("prefers static routes over patterns", () => {
+    const fixed = vi.fn();
+    const pattern = vi.fn();
+    new Router({
+      routes: { "/ev/:tab": pattern, "/ev/asistan": fixed },
+      notFound: vi.fn(),
+      location: fakeLocation("#/ev/asistan"),
+    }).start();
+    expect(fixed).toHaveBeenCalledTimes(1);
+    expect(pattern).not.toHaveBeenCalled();
   });
 });
