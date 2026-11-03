@@ -52,6 +52,13 @@ spec:
               value: "false"
           ports:
             - containerPort: 3000
+          # First start runs DB migrations and plugin installs before listening (minutes on 2 OCPU).
+          startupProbe:
+            httpGet:
+              path: /grafana/api/health
+              port: 3000
+            periodSeconds: 10
+            failureThreshold: 60
           readinessProbe:
             httpGet:
               path: /grafana/api/health
@@ -61,8 +68,8 @@ spec:
             httpGet:
               path: /grafana/api/health
               port: 3000
-            initialDelaySeconds: 60
             periodSeconds: 30
+            timeoutSeconds: 5
           resources:
             requests:
               cpu: 50m
