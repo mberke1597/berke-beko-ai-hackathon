@@ -9,6 +9,8 @@ Phase 1 — Skeleton + pipeline (started 2026-11-03). Phase 0 (Oracle VM) runs i
 
 ## In progress
 - Phase 1: backend, frontend, infra teammates working on separate branches.
+- 2026-11-03: Real problem received: **Çeliknaz** voice home-comfort assistant (mock HomeWhiz AC). Project document `Planning/Celiknaz.md` and UI spec `Planning/Celiknaz-UI.md` (3 tabs: Evim, Görevler, Asistan) approved for development. Docs: `docs/overview.md`, `docs/architecture/architecture.md`, `docs/diagrams/00–11`.
+- Phase 0: human is creating the Oracle A1 VM (Milan).
 
 ## Next
 - Phase 0: create A1 VM, open ports, install k3s + cert-manager, add GitHub secrets.
