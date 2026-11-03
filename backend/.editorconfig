@@ -66,6 +66,8 @@ dotnet_diagnostic.IDE0005.severity = warning
 # LoggerMessage source generators are welcome but not mandatory.
 dotnet_diagnostic.CA1848.severity = suggestion
 dotnet_diagnostic.CA1873.severity = suggestion
+# Parameter names that are Visual Basic keywords (step, call, error) are fine: no VB consumers.
+dotnet_diagnostic.CA1716.severity = none
 # No ConfigureAwait in ASP.NET Core apps.
 dotnet_diagnostic.CA2007.severity = none
 
@@ -73,3 +75,9 @@ dotnet_diagnostic.CA2007.severity = none
 # Test method names use underscores; xUnit test classes must be public.
 dotnet_diagnostic.CA1707.severity = none
 dotnet_diagnostic.CA1515.severity = none
+
+[**/Migrations/*.cs]
+# EF Core generated migrations are not hand-formatted or hand-analysed.
+generated_code = true
+dotnet_analyzer_diagnostic.severity = none
+dotnet_diagnostic.IDE0005.severity = none
