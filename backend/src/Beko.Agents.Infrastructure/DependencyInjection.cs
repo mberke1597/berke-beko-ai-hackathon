@@ -1,4 +1,7 @@
+using Beko.Agents.Application.Homes;
 using Beko.Agents.Application.Options;
+using Beko.Agents.Infrastructure.HomeWhiz;
+using Beko.Agents.Infrastructure.HomeWhiz.Mock;
 using Beko.Agents.Infrastructure.Persistence.Mongo;
 using Beko.Agents.Infrastructure.Persistence.Postgres;
 using Beko.Agents.Infrastructure.Telemetry;
@@ -41,6 +44,10 @@ public static class DependencyInjection
         services.AddSingleton(sp =>
             sp.GetRequiredService<IMongoClient>().GetDatabase(sp.GetRequiredService<IOptions<MongoOptions>>().Value.Database));
 
+        services.AddSingleton<IDeviceEventStore, MongoDeviceEventStore>();
+
+        AddHomeWhiz(services);
+
         services.AddHealthChecks()
             .AddDbContextCheck<AgentsDbContext>("postgres", tags: [ReadyTag])
             .AddCheck<MongoHealthCheck>("mongodb", tags: [ReadyTag], timeout: HealthCheckTimeout);
@@ -58,10 +65,26 @@ public static class DependencyInjection
         AddValidatedOptions<MongoOptions>(services, configuration, MongoOptions.SectionName);
         AddValidatedOptions<JwtOptions>(services, configuration, JwtOptions.SectionName);
         AddValidatedOptions<PricingOptions>(services, configuration, PricingOptions.SectionName);
+        AddValidatedOptions<HomeWhizOptions>(services, configuration, HomeWhizOptions.SectionName);
+        AddValidatedOptions<SimulationOptions>(services, configuration, SimulationOptions.SectionName);
 
         services.AddSingleton<IValidateOptions<AnthropicOptions>>(new AnthropicOptionsValidator(requireSecrets));
         services.AddSingleton<IValidateOptions<JwtOptions>>(new JwtOptionsValidator(requireSecrets));
         services.AddSingleton<IValidateOptions<PricingOptions>, PricingOptionsValidator>();
+    }
+
+    /// <summary>HomeWhiz client plus the mock HomeWhiz (in-memory store and device simulator) it points to today.</summary>
+    private static void AddHomeWhiz(IServiceCollection services)
+    {
+        services.AddHttpClient<IHomeWhizClient, HomeWhizHttpClient>((sp, client) =>
+        {
+            var baseUrl = sp.GetRequiredService<IOptions<HomeWhizOptions>>().Value.BaseUrl;
+            client.BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/", UriKind.Absolute);
+        });
+
+        services.AddSingleton<SimulationClock>();
+        services.AddSingleton<MockHomeWhizStore>();
+        services.AddHostedService<DeviceSimulator>();
     }
 
     private static void AddValidatedOptions<TOptions>(IServiceCollection services, IConfiguration configuration, string sectionName)
