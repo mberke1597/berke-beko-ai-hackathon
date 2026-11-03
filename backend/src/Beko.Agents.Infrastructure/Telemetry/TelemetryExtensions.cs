@@ -1,3 +1,4 @@
+using Beko.Agents.Application.Telemetry;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using OpenTelemetry;

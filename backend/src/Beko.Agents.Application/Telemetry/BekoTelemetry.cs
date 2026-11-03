@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
 
-namespace Beko.Agents.Infrastructure.Telemetry;
+namespace Beko.Agents.Application.Telemetry;
 
 /// <summary>Shared OpenTelemetry instruments for the platform's own spans and metrics.</summary>
 public static class BekoTelemetry
