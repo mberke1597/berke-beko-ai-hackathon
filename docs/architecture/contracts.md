@@ -281,7 +281,7 @@ SignalR `DeviceHub` additions: `ComfortCheckRequested` `{ "applianceId", "member
 
 | Method + path | Body / response |
 |---|---|
-| `GET /api/homes/me/tasks?status=open` | `[HouseholdTask]` |
+| `GET /api/homes/me/tasks?status=open` | `[HouseholdTask]`; `status` accepts `open`, `done`, `skipped` (omitted = all) |
 | `POST /api/homes/me/tasks` | `{ "title", "assignedMemberId": null, "effortPoints": 1 }` → `201 HouseholdTask` (null assignee → distributed by `fair_share`) |
 | `POST /api/tasks/{id}/done` / `skip` | `HouseholdTask` (done adds effort points to the assignee) |
 | `POST /api/tasks/{id}/reassign` | `{ "memberId": null }` → `HouseholdTask` (null = redistribute) |
