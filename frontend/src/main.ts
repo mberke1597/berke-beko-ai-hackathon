@@ -48,7 +48,7 @@ const router: Router = new Router({
     },
     [paths.evAssistant]: () => {
       setScreen(`${tr.home.tabs.assistant} · ${tr.home.appName}`, true);
-      return renderAssistant(renderEvShell(root, homeSession(), "assistant"));
+      return renderAssistant(renderEvShell(root, homeSession(), "assistant"), homeSession());
     },
     [paths.evDevicePattern]: (params) => {
       setScreen(tr.home.appName, true);

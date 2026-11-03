@@ -7,7 +7,8 @@ export type StoreChange =
   | { kind: "home" }
   | { kind: "appliance"; appliance: Appliance }
   | { kind: "event"; event: ApplianceEvent }
-  | { kind: "live"; status: LiveStatus };
+  | { kind: "live"; status: LiveStatus }
+  | { kind: "aiTag"; applianceId: string };
 
 export type StoreListener = (change: StoreChange) => void;
 
@@ -18,8 +19,13 @@ function isNewer(next: Appliance, current: Appliance): boolean {
   return Number.isNaN(a) || Number.isNaN(b) || a >= b;
 }
 
+/** How long the "Çeliknaz ayarladı" tag stays on a card (browser clock, not simulator time). */
+export const AI_TAG_MS = 20_000;
+
 export class HomeStore {
   private view: HomeView | undefined;
+  private readonly aiTags = new Map<string, number>();
+  private readonly aiTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private liveStatus: LiveStatus = "disconnected";
   private readonly listeners = new Set<StoreListener>();
 
@@ -61,6 +67,29 @@ export class HomeStore {
     }
     this.notify({ kind: "appliance", appliance });
     return true;
+  }
+
+  /** Marks appliances changed by a Çeliknaz action; the tag disappears after `AI_TAG_MS`. */
+  markAiChanged(ids: readonly string[], now: number = Date.now()): void {
+    for (const id of new Set(ids)) {
+      this.aiTags.set(id, now + AI_TAG_MS);
+      const old = this.aiTimers.get(id);
+      if (old !== undefined) clearTimeout(old);
+      this.aiTimers.set(
+        id,
+        setTimeout(() => {
+          this.aiTags.delete(id);
+          this.aiTimers.delete(id);
+          this.notify({ kind: "aiTag", applianceId: id });
+        }, AI_TAG_MS),
+      );
+      this.notify({ kind: "aiTag", applianceId: id });
+    }
+  }
+
+  isAiChanged(id: string, now: number = Date.now()): boolean {
+    const until = this.aiTags.get(id);
+    return until !== undefined && until > now;
   }
 
   pushEvent(event: ApplianceEvent): void {

@@ -144,4 +144,15 @@
   --icon-xl: 40px;
   --touch-target: 44px;
   --transition-normal: 200ms ease;
+
+  /* Çeliknaz chat */
+  --color-bubble-user: var(--color-primary);
+  --color-on-bubble-user: var(--color-on-primary);
+  --color-bubble-assistant: var(--color-app-surface);
+  --color-on-bubble-assistant: var(--color-text);
+  --color-ai-tag: #6b4fd8;
+  --color-ai-tag-subtle: #efebfd;
+  --color-timeline-line: var(--color-grey-300);
+  --chat-max-bubble: 85%;
+  --timeline-indent: var(--space-4);
 }

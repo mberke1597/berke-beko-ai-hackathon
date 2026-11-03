@@ -97,7 +97,7 @@ function build(root: HTMLElement, session: HomeSession): ShellParts {
 
   const fab = el("button", { type: "button", class: "ev-fab", "aria-label": tr.home.voice.button }, [icon("mic", "icon ev-fab__icon")]);
   fab.addEventListener("click", () => {
-    openVoiceOverlay(app, fab);
+    openVoiceOverlay(app, fab, session);
   });
 
   const toasts = el("div", { class: "ev-toasts", "aria-live": "polite" });
@@ -135,6 +135,7 @@ export function renderEvShell(root: HTMLElement, session: HomeSession, tab: EvTa
   if (current?.root !== root || !current.app.isConnected) current = build(root, session);
   const { app, main, tabLinks } = current;
   app.dataset.mode = tab === null ? "detail" : "tab";
+  app.dataset.tab = tab ?? "";
   for (const [id, link] of tabLinks) {
     if (id === tab) link.setAttribute("aria-current", "page");
     else link.removeAttribute("aria-current");
