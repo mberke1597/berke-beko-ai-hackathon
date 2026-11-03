@@ -13,7 +13,7 @@ export async function sendDeviceCommand(
   command: DeviceCommand,
   source: CommandSource = "app",
 ): Promise<CommandOutcome> {
-  const check = buildCommand(appliance, command, source, defaultMemberId(session));
+  const check = buildCommand(appliance, command, source, session.s2.memberId);
   if (!check.ok) {
     return { ok: false, message: check.reason === "unsupported" ? tr.home.errors.unsupported : tr.home.errors.invalid };
   }
@@ -25,8 +25,4 @@ export async function sendDeviceCommand(
   } catch (error) {
     return { ok: false, message: commandErrorMessage(error) };
   }
-}
-
-function defaultMemberId(session: HomeSession): string | undefined {
-  return session.store.home?.members.find((m) => m.isDefault)?.id;
 }

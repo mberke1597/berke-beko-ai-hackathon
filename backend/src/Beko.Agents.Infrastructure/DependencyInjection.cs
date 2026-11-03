@@ -1,7 +1,16 @@
+using Anthropic;
+using Beko.Agents.Application.Agents;
+using Beko.Agents.Application.Agents.Guardrails;
+using Beko.Agents.Application.Agents.Llm;
+using Beko.Agents.Application.Agents.Runs;
+using Beko.Agents.Application.Agents.Tools;
+using Beko.Agents.Application.Agents.Workflow;
 using Beko.Agents.Application.Homes;
 using Beko.Agents.Application.Options;
+using Beko.Agents.Infrastructure.Agents;
 using Beko.Agents.Infrastructure.HomeWhiz;
 using Beko.Agents.Infrastructure.HomeWhiz.Mock;
+using Beko.Agents.Infrastructure.Llm;
 using Beko.Agents.Infrastructure.Persistence.Mongo;
 using Beko.Agents.Infrastructure.Persistence.Postgres;
 using Beko.Agents.Infrastructure.Telemetry;
@@ -37,7 +46,9 @@ public static class DependencyInjection
             throw new InvalidOperationException($"ConnectionStrings:{PostgresConnectionStringName} is required.");
         }
 
-        services.AddDbContext<AgentsDbContext>(options => options.UseNpgsql(postgresConnectionString));
+        services.AddDbContext<AgentsDbContext>(options => options
+            .UseNpgsql(postgresConnectionString)
+            .UseSnakeCaseNamingConvention());
 
         services.AddSingleton<IMongoClient>(sp =>
             new MongoClient(sp.GetRequiredService<IOptions<MongoOptions>>().Value.ConnectionString));
@@ -47,6 +58,7 @@ public static class DependencyInjection
         services.AddSingleton<IDeviceEventStore, MongoDeviceEventStore>();
 
         AddHomeWhiz(services);
+        AddAgentRuntime(services);
 
         services.AddHealthChecks()
             .AddDbContextCheck<AgentsDbContext>("postgres", tags: [ReadyTag])
@@ -85,6 +97,55 @@ public static class DependencyInjection
         services.AddSingleton<SimulationClock>();
         services.AddSingleton<MockHomeWhizStore>();
         services.AddHostedService<DeviceSimulator>();
+    }
+
+    /// <summary>Applies pending EF Core migrations (used on startup in Development only).</summary>
+    public static async Task MigrateDatabaseAsync(this IServiceProvider services)
+    {
+        await using var scope = services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<AgentsDbContext>();
+        await db.Database.MigrateAsync();
+    }
+
+    /// <summary>Agent runtime: LLM client, step wrapper, workflow engine and executors, tools, stores and the run queue.</summary>
+    private static void AddAgentRuntime(IServiceCollection services)
+    {
+        services.AddSingleton(sp =>
+        {
+            var options = sp.GetRequiredService<IOptions<AnthropicOptions>>().Value;
+            return new AnthropicClient
+            {
+                ApiKey = options.ApiKey,
+                BaseUrl = options.BaseUrl,
+                Timeout = AnthropicLlmClient.DefaultTimeout,
+                MaxRetries = AnthropicLlmClient.DefaultMaxRetries,
+            };
+        });
+        services.AddSingleton<ILlmClient, AnthropicLlmClient>();
+        services.AddSingleton<ICostCalculator, CostCalculator>();
+
+        services.AddSingleton<IConversationStore, MongoConversationStore>();
+        services.AddSingleton<IRunStore, MongoRunStore>();
+        services.AddScoped<IAgentRepository, PostgresAgentRepository>();
+        services.AddScoped<ICostRollup, PostgresCostRollup>();
+
+        services.AddScoped<IAgentTool, GetHomeStatusTool>();
+        services.AddScoped<IAgentTool, ControlDeviceTool>();
+        services.AddScoped<IToolRegistry, ToolRegistry>();
+
+        services.AddScoped<IStepExecutor, UserMessageTriggerExecutor>();
+        services.AddScoped<IStepExecutor, InputGuardExecutor>();
+        services.AddScoped<IStepExecutor, OutputGuardExecutor>();
+        services.AddScoped<IStepExecutor, AgentLlmExecutor>();
+        services.AddScoped<IStepExecutor, RespondExecutor>();
+        services.AddScoped<RunRecorder>();
+        services.AddScoped<WorkflowEngine>();
+        services.AddScoped<ChatService>();
+        services.AddScoped<DeviceService>();
+
+        services.AddSingleton<ChannelRunDispatcher>();
+        services.AddSingleton<IRunDispatcher>(sp => sp.GetRequiredService<ChannelRunDispatcher>());
+        services.AddHostedService<RunWorker>();
     }
 
     private static void AddValidatedOptions<TOptions>(IServiceCollection services, IConfiguration configuration, string sectionName)

@@ -54,6 +54,8 @@ ASP.NET Core double-underscore binding. Options classes are validated on start.
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP endpoint (standard OTel env var) | `http://otel-collector:4317` |
 | `OTEL_SERVICE_NAME` | service name | `beko-backend` |
 | `App__Version` / `App__Commit` | shown by `/api/version` | `0.1.0` / git sha |
+| `Anthropic__BaseUrl` | `AnthropicOptions.BaseUrl` | `https://api.anthropic.com` |
+| `Database__MigrateOnStartup` | apply EF migrations on start (Development default true) | `true` |
 | `App__GrafanaBaseUrl` | used to build trace links | `/grafana` |
 
 Pricing lives in `appsettings.json` under `Pricing:Models:{model}` with `InputPerMTok`, `OutputPerMTok`, `CacheReadPerMTok`, `CacheWritePerMTok` (USD).
@@ -279,7 +281,7 @@ SignalR `DeviceHub` additions: `ComfortCheckRequested` `{ "applianceId", "member
 
 | Method + path | Body / response |
 |---|---|
-| `GET /api/homes/me/tasks?status=open` | `[HouseholdTask]` |
+| `GET /api/homes/me/tasks?status=open` | `[HouseholdTask]`; `status` accepts `open`, `done`, `skipped` (omitted = all) |
 | `POST /api/homes/me/tasks` | `{ "title", "assignedMemberId": null, "effortPoints": 1 }` → `201 HouseholdTask` (null assignee → distributed by `fair_share`) |
 | `POST /api/tasks/{id}/done` / `skip` | `HouseholdTask` (done adds effort points to the assignee) |
 | `POST /api/tasks/{id}/reassign` | `{ "memberId": null }` → `HouseholdTask` (null = redistribute) |
