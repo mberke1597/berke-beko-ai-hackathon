@@ -77,6 +77,109 @@ No auth.
 ### Errors (all endpoints)
 RFC 9457 `application/problem+json` (`type`, `title`, `status`, `detail`, `traceId`). The frontend shows a Turkish message based on `status`.
 
+## Çeliknaz slice 1 — mock HomeWhiz, home, appliances
+
+Design: `Planning/Celiknaz.md` §6, UI: `Planning/Celiknaz-UI.md`. Until auth exists (Phase 4), "me" means the seeded demo home and these endpoints need no token.
+
+### Configuration
+
+| Variable | Options / meaning | Default |
+|---|---|---|
+| `HomeWhiz__BaseUrl` | `HomeWhizOptions.BaseUrl`, base URL `IHomeWhizClient` calls | `http://localhost:5080/api/mock/homewhiz` (local), `http://localhost:8080/api/mock/homewhiz` (container) |
+| `Simulation__TimeScale` | `SimulationOptions.TimeScale`, simulated seconds per real second | `1` (demo: `60`) |
+| `Simulation__TickSeconds` | `SimulationOptions.TickSeconds`, real seconds between simulator ticks | `5` |
+| `Simulation__OutdoorTempC` | `SimulationOptions.OutdoorTempC`, fixed outdoor temperature until the weather mock exists | `31` |
+
+### Seeded demo home (stable ids)
+
+- Home `home-1` "Evim", city İstanbul.
+- Rooms: `salon` Salon, `yatak-odasi` Yatak Odası, `cocuk-odasi` Çocuk Odası, `mutfak` Mutfak, `camasir-odasi` Çamaşır Odası.
+- Members: `ayse` Ayşe (owner, default), `mehmet` Mehmet (member), `zeynep` Zeynep (member).
+- Appliances: `ac-salon`, `ac-yatak`, `ac-cocuk` (air_conditioner), `dishwasher-1` and `oven-1` and `fridge-1` (mutfak), `washer-1` (camasir-odasi). Initial `ac-salon`: on, cool, setpoint 25, room 24.8 °C, humidity 55 %.
+
+### Appliance shape (shared by mock HomeWhiz and app API)
+
+```json
+{
+  "id": "ac-salon",
+  "homeId": "home-1",
+  "roomId": "salon",
+  "type": "air_conditioner",
+  "displayName": "Salon Kliması",
+  "model": "Beko BK-12 (demo)",
+  "capabilities": {
+    "commands": ["power", "setpoint", "mode", "fan"],
+    "modes": ["cool", "heat", "dry", "fan", "auto", "eco"],
+    "fanLevels": ["auto", "low", "medium", "high"],
+    "setpoint": { "min": 16, "max": 30, "step": 0.5 },
+    "programs": []
+  },
+  "state": {
+    "power": true,
+    "status": "running",
+    "powerW": 820,
+    "updatedAtUtc": "2026-11-03T10:00:00Z",
+    "ac": { "setpoint": 25, "mode": "cool", "fan": "auto", "roomTempC": 24.8, "humidityPct": 55 },
+    "program": null,
+    "oven": null,
+    "fridge": null
+  }
+}
+```
+
+- `type`: `air_conditioner` | `washing_machine` | `dishwasher` | `oven` | `refrigerator`.
+- `state.status`: `off` | `idle` | `running` | `paused` | `finished` | `error`.
+- `state.program` (washer, dishwasher): `{ "program": "eco50", "temperatureC": 50, "remainingMin": 42, "progressPct": 60, "startAtUtc": null }`.
+- `state.oven`: `{ "mode": "conventional|fan|grill", "targetTempC": 180, "currentTempC": 120, "timerMin": 30 }`.
+- `state.fridge`: `{ "fridgeTempC": 4, "freezerTempC": -18, "doorOpen": false }`.
+- Exactly the sub-object for the appliance's type is non-null.
+
+### Commands
+
+`{ "type": "...", "value": ... }`
+
+| `type` | `value` | Applies to |
+|---|---|---|
+| `power` | `true` / `false` | all except refrigerator |
+| `setpoint` | number within `capabilities.setpoint` | air_conditioner |
+| `mode` | one of `capabilities.modes` | air_conditioner, oven |
+| `fan` | one of `capabilities.fanLevels` | air_conditioner |
+| `start_program` | `{ "program": "eco50", "temperatureC": 50, "startAtUtc": null }` | washing_machine, dishwasher |
+| `pause` / `resume` / `stop` | `null` | washing_machine, dishwasher, oven |
+| `set_oven` | `{ "mode": "fan", "targetTempC": 180, "timerMin": 30 }` | oven |
+
+Unsupported command or out-of-range value → `422` problem+json with a Turkish-mappable `title`.
+
+### Mock HomeWhiz API (simulates the external system; state lives in memory and resets on restart)
+
+| Method + path | Response |
+|---|---|
+| `GET /api/mock/homewhiz/homes` | `[{ "id", "name", "city" }]` |
+| `GET /api/mock/homewhiz/homes/{homeId}` | `{ "id", "name", "city", "location": { "lat", "lng" }, "rooms": [{ "id", "name" }], "members": [{ "id", "displayName", "role" }] }` |
+| `GET /api/mock/homewhiz/homes/{homeId}/rooms` | `[{ "id", "name", "applianceIds": [] }]` |
+| `GET /api/mock/homewhiz/homes/{homeId}/appliances` | `[Appliance]` |
+| `GET /api/mock/homewhiz/appliances/{id}` | `Appliance` |
+| `GET /api/mock/homewhiz/appliances/{id}/telemetry?fromUtc&toUtc` | `[{ "tsUtc", "roomTempC", "humidityPct", "powerW" }]` (AC: room values; others: `powerW` only) |
+| `POST /api/mock/homewhiz/appliances/{id}/commands` | `202 { "commandId", "accepted": true, "appliance": Appliance }` or `422` |
+
+### App API (what the frontend calls; reads through `IHomeWhizClient`)
+
+| Method + path | Request / response |
+|---|---|
+| `GET /api/homes/me` | `{ "home": { "id", "name", "city" }, "rooms": [{ "id", "name" }], "members": [{ "id", "displayName", "role", "isDefault" }], "appliances": [Appliance] }` |
+| `GET /api/devices/{id}` | `Appliance` |
+| `POST /api/devices/{id}/commands` | `{ "type", "value", "source": "app\|remote\|voice\|ai\|schedule", "memberId": "ayse" }` → `202 { "commandId", "accepted", "appliance" }` or `422` |
+| `GET /api/devices/{id}/telemetry?fromUtc&toUtc` | same as mock telemetry |
+
+Every accepted command writes a Mongo `device_events` document: `{ homeId, deviceId, source, memberId, command, before, after, atUtc, trace_id, span_id }`.
+
+### SignalR `DeviceHub` — `/hubs/devices`
+
+- Client → server: `JoinHome(homeId)`.
+- Server → client (group `home:{homeId}`):
+  - `DeviceStateChanged` `{ "appliance": Appliance }`: after every command and whenever the simulator changes visible state (rounded: 0.1 °C, 1 % humidity, 1 min remaining).
+  - `DeviceEvent` `{ "applianceId", "event": "finished|preheated|timer_done|error", "atUtc" }`.
+
 ## Later phases
 
 Phase 2+ sections (auth, agents, chat, runs, workflow, dashboard, SignalR `RunHub` events) are added here before those phases start.
