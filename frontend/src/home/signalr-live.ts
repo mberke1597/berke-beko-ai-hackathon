@@ -1,5 +1,6 @@
 import { HubConnectionBuilder, LogLevel } from "@microsoft/signalr";
 import type { ConnectLive } from "./live.ts";
+import { decodeComfortCheck, decodeNotificationCreated, decodeTaskAssigned } from "./slice2/types.ts";
 import { decodeApplianceEvent, decodeStateChanged } from "./types.ts";
 
 export const DEVICE_HUB_URL = "/hubs/devices";
@@ -23,6 +24,18 @@ export const connectSignalRLive: ConnectLive = (homeId, handlers) => {
   connection.on("DeviceEvent", (payload: unknown) => {
     const event = decodeApplianceEvent(payload);
     if (event) handlers.event(event);
+  });
+  connection.on("TaskAssigned", (payload: unknown) => {
+    const task = decodeTaskAssigned(payload);
+    if (task) handlers.taskAssigned?.(task);
+  });
+  connection.on("NotificationCreated", (payload: unknown) => {
+    const notification = decodeNotificationCreated(payload);
+    if (notification) handlers.notificationCreated?.(notification);
+  });
+  connection.on("ComfortCheckRequested", (payload: unknown) => {
+    const check = decodeComfortCheck(payload);
+    if (check) handlers.comfortCheckRequested?.(check);
   });
   connection.onreconnecting(() => {
     handlers.status("reconnecting");

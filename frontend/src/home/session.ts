@@ -5,9 +5,10 @@ import { createHttpHomeApi, type HomeApi } from "./api.ts";
 import { createHttpChatApi, type ChatApi } from "./chat/api.ts";
 import { ChatController } from "./chat/controller.ts";
 import type { ConnectRunLive } from "./chat/run-live.ts";
-import { safeStore, type KeyValueStore } from "./chat/storage.ts";
-import { DEFAULT_MEMBER_ID } from "./commands.ts";
+import { safeStore, STORAGE_KEYS, type KeyValueStore } from "./chat/storage.ts";
 import type { ConnectLive } from "./live.ts";
+import { createHttpSlice2Api, type Slice2Api } from "./slice2/api.ts";
+import { Slice2Controller } from "./slice2/controller.ts";
 import { HomeStore } from "./store.ts";
 
 export interface HomeBackend {
@@ -15,6 +16,7 @@ export interface HomeBackend {
   connectLive: ConnectLive;
   chat: ChatApi;
   connectRunLive: ConnectRunLive;
+  slice2: Slice2Api;
   isMock: boolean;
 }
 
@@ -25,9 +27,18 @@ export function isMockMode(env: { VITE_USE_MOCK?: string } = import.meta.env): b
 async function createBackend(): Promise<HomeBackend> {
   if (isMockMode()) {
     const [{ createMockHome }, { createMockAgent }] = await Promise.all([import("./mock/simulator.ts"), import("./mock/agent.ts")]);
+    const { createMockEngine } = await import("./mock/engine.ts");
     const mock = createMockHome();
     const agent = createMockAgent(mock);
-    return { api: mock.api, connectLive: mock.connectLive, chat: agent.chat, connectRunLive: agent.connectRunLive, isMock: true };
+    const engine = createMockEngine(mock, agent);
+    return {
+      api: mock.api,
+      connectLive: mock.connectLive,
+      chat: agent.chat,
+      connectRunLive: agent.connectRunLive,
+      slice2: engine.api,
+      isMock: true,
+    };
   }
   const [{ connectSignalRLive }, { connectSignalRRuns }] = await Promise.all([import("./signalr-live.ts"), import("./chat/signalr-runs.ts")]);
   return {
@@ -35,6 +46,7 @@ async function createBackend(): Promise<HomeBackend> {
     connectLive: connectSignalRLive,
     chat: createHttpChatApi(),
     connectRunLive: connectSignalRRuns,
+    slice2: createHttpSlice2Api(),
     isMock: false,
   };
 }
@@ -45,11 +57,30 @@ export class HomeSession {
   private disconnect: (() => void) | undefined;
   private loading: Promise<void> | undefined;
   private chatPromise: Promise<ChatController> | undefined;
+  /** Current member, settings, context, notifications and tasks (slice 2). */
+  readonly s2: Slice2Controller;
 
   constructor(
     private readonly factory: () => Promise<HomeBackend> = createBackend,
     private readonly storage: KeyValueStore = safeStore(),
-  ) {}
+  ) {
+    this.s2 = new Slice2Controller({
+      api: async () => (await this.backend()).slice2,
+      storage,
+      onMemberChange: () => {
+        this.resetChat();
+      },
+    });
+  }
+
+  /** A new demo member starts a new conversation (the old one belongs to the previous member). */
+  private resetChat(): void {
+    void this.chatPromise?.then((chat) => {
+      chat.dispose();
+    });
+    this.chatPromise = undefined;
+    this.storage.remove(STORAGE_KEYS.conversationId);
+  }
 
   /** The app-wide Çeliknaz chat (shared by the Asistan tab and the voice overlay). */
   chat(): Promise<ChatController> {
@@ -59,7 +90,7 @@ export class HomeSession {
           chat: backend.chat,
           connectRunLive: backend.connectRunLive,
           store: this.storage,
-          memberId: () => this.store.home?.members.find((m) => m.isDefault)?.id ?? DEFAULT_MEMBER_ID,
+          memberId: () => this.s2.memberId,
           onActions: (actions) => {
             this.store.markAiChanged(actions.map((a) => a.applianceId));
           },
@@ -101,7 +132,19 @@ export class HomeSession {
       status: (status) => {
         this.store.setLive(status);
       },
+      taskAssigned: (task) => {
+        this.s2.ingestTaskAssigned(task);
+      },
+      notificationCreated: (notification) => {
+        this.s2.ingestNotification(notification);
+      },
+      comfortCheckRequested: (check) => {
+        this.s2.ingestComfortCheck(check);
+      },
     });
+    this.s2.validateMember(view.members.map((m) => m.id));
+    void this.s2.loadNotifications().catch(() => undefined);
+    void this.s2.refreshContext().catch(() => undefined);
   }
 
   dispose(): void {

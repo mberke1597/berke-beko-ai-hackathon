@@ -12,7 +12,12 @@ export interface RequestOptions {
 export interface ApiClient {
   get<T>(path: string, decode: Decoder<T>, options?: RequestOptions): Promise<T>;
   post<T>(path: string, body: unknown, decode: Decoder<T>, options?: RequestOptions): Promise<T>;
+  put<T>(path: string, body: unknown, decode: Decoder<T>, options?: RequestOptions): Promise<T>;
+  delete<T>(path: string, decode: Decoder<T>, options?: RequestOptions): Promise<T>;
 }
+
+/** Decoder for `204 No Content` responses (and any body that is ignored). */
+export const decodeNoContent: Decoder<null> = () => null;
 
 function isJson(response: Response): boolean {
   const type = response.headers.get("content-type") ?? "";
@@ -67,6 +72,8 @@ export function createApiClient(fetchFn: FetchFn = (input, init) => fetch(input,
   return {
     get: (path, decode, options) => request("GET", path, decode, options),
     post: (path, body, decode, options) => request("POST", path, decode, options, body),
+    put: (path, body, decode, options) => request("PUT", path, decode, options, body),
+    delete: (path, decode, options) => request("DELETE", path, decode, options),
   };
 }
 

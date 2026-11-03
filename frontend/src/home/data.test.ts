@@ -5,6 +5,7 @@ import { tr } from "../i18n/tr.ts";
 import { commandErrorMessage, createHttpHomeApi, telemetryUrl } from "./api.ts";
 import { createDemoHome } from "./mock/fixtures.ts";
 import { createMockAgent } from "./mock/agent.ts";
+import { createMockEngine } from "./mock/engine.ts";
 import { createMockHome } from "./mock/simulator.ts";
 import { HomeSession, isMockMode, type HomeBackend } from "./session.ts";
 import { HomeStore } from "./store.ts";
@@ -257,8 +258,16 @@ describe("store and session", () => {
   it("loads the home once and wires live updates into the store", async () => {
     const mock = createMockHome({ tickMs: 0, latencyMs: 0 });
     const agent = createMockAgent(mock, { stepDelayMs: 0 });
+    const engine = createMockEngine(mock, agent, { latencyMs: 0 });
     const factory = vi.fn(() =>
-      Promise.resolve<HomeBackend>({ api: mock.api, connectLive: mock.connectLive, chat: agent.chat, connectRunLive: agent.connectRunLive, isMock: true }),
+      Promise.resolve<HomeBackend>({
+        api: mock.api,
+        connectLive: mock.connectLive,
+        chat: agent.chat,
+        connectRunLive: agent.connectRunLive,
+        slice2: engine.api,
+        isMock: true,
+      }),
     );
     const session = new HomeSession(factory);
     await Promise.all([session.ensureLoaded(), session.ensureLoaded()]);
