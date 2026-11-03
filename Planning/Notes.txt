@@ -1,0 +1,69 @@
+Evolution
+
+1-) User Centeric Impact and Benefits
+
+	User ne kadar değer var? Fayda 
+
+
+2-) Agent Effectiveness / Tecnical
+
+	Ne kadar teknik olarak ne adar efektif ve çalışabilir
+
+
+3-) Innovation and Differentetion
+
+	Ne kadar farklı bir şey ? Ne kadar farklı bir şey ? Ne kadar inovatif?
+
+4-) Business Vale? 
+
+	İş impacti ne kadar? 
+	Feasibility
+	Küçük bir kitle küçük sorunu çözmek istenmiyor?
+
+5-) AI Safety/ Truat
+
+	AI Governance
+
+Teams yayınlanıyor? Kanal -> Şirket içi -> Yetkiler
+
+Worflow of Agent
+
+Sayfası
+
+Agent Subagent gösterim
+
+Insttructions
+
+	Genel Kurallar 
+
+		Konu sırnırlandırma
+
+
+Kullanıcı Yetkileri
+
+Agent Ekleme
+Monitor
+
+LLm Cost
+
+
+
+
+Beko ya yönelik Bulgular  :
+
+AWS Kubernetes Docker 
+Full Stack Development (Front-end & Back-end):
+Design and develop scalable front-end and back-end solutions using modern technologies. Build user-friendly interfaces with frameworks such as React, Vue, and Angular, and develop robust backend services using .NET Core and C#, ensuring performance, security, and maintainability.
+
+Data Management and System Architecture:
+Design and manage data structures and databases using MongoDB, PostgreSQL, and Microsoft SQL Server, developing optimized queries and data flows to support large-scale manufacturing and business operations.
+
+
+
+Production Agent
+
+Beko Brand
+
+
+
+

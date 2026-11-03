@@ -1,0 +1,28 @@
+# Secrets
+.env
+*.pem
+*.key
+kubeconfig*
+
+# .NET
+bin/
+obj/
+*.user
+.vs/
+TestResults/
+
+# Node
+node_modules/
+dist/
+coverage/
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Claude Code local files
+.claude/settings.local.json
+.claude/worktrees/
