@@ -132,7 +132,10 @@ Design: `Planning/Celiknaz.md` §6, UI: `Planning/Celiknaz-UI.md`. Until auth ex
 - `state.program` (washer, dishwasher): `{ "program": "eco50", "temperatureC": 50, "remainingMin": 42, "progressPct": 60, "startAtUtc": null }`.
 - `state.oven`: `{ "mode": "conventional|fan|grill", "targetTempC": 180, "currentTempC": 120, "timerMin": 30 }`.
 - `state.fridge`: `{ "fridgeTempC": 4, "freezerTempC": -18, "doorOpen": false }`.
-- Exactly the sub-object for the appliance's type is non-null.
+- Exactly the sub-object for the appliance's type is non-null. Washer/dishwasher always have `state.program`: when idle it holds the selected program at full duration with `progressPct` 0, and `status` tells whether it runs.
+- Oven target temperature uses `capabilities.setpoint` (`{ "min": 50, "max": 250, "step": 5 }`); oven `capabilities.modes` are `conventional`, `fan`, `grill`.
+- **Simulated time**: `state.updatedAtUtc`, telemetry `tsUtc` and `DeviceEvent.atUtc` are simulator time (starts at real time, runs `TimeScale`× faster). Mongo `device_events.atUtc` is real time. Clients must not compare simulator timestamps with the browser clock.
+- Rounding of visible state: 0.1 °C, 1 % humidity, 1 % progress, whole minutes (remaining, oven timer), 10 W power.
 
 ### Commands
 
@@ -148,7 +151,7 @@ Design: `Planning/Celiknaz.md` §6, UI: `Planning/Celiknaz-UI.md`. Until auth ex
 | `pause` / `resume` / `stop` | `null` | washing_machine, dishwasher, oven |
 | `set_oven` | `{ "mode": "fan", "targetTempC": 180, "timerMin": 30 }` | oven |
 
-Unsupported command or out-of-range value → `422` problem+json with a Turkish-mappable `title`.
+Unsupported command or out-of-range value → `422` problem+json with a Turkish `title` and a stable `code`: `command_not_supported` | `invalid_value` | `value_out_of_range` | `invalid_state` (e.g. pause when not running). Clients map messages on `code`.
 
 ### Mock HomeWhiz API (simulates the external system; state lives in memory and resets on restart)
 
@@ -169,7 +172,9 @@ Unsupported command or out-of-range value → `422` problem+json with a Turkish-
 | `GET /api/homes/me` | `{ "home": { "id", "name", "city" }, "rooms": [{ "id", "name" }], "members": [{ "id", "displayName", "role", "isDefault" }], "appliances": [Appliance] }` |
 | `GET /api/devices/{id}` | `Appliance` |
 | `POST /api/devices/{id}/commands` | `{ "type", "value", "source": "app\|remote\|voice\|ai\|schedule", "memberId": "ayse" }` → `202 { "commandId", "accepted", "appliance" }` or `422` |
-| `GET /api/devices/{id}/telemetry?fromUtc&toUtc` | same as mock telemetry |
+| `GET /api/devices/{id}/telemetry?fromUtc&toUtc` | same as mock telemetry; without a range it returns the last 24 simulated hours (clients should call it without a range) |
+
+`source` outside the allowed values → `400`; missing `memberId` defaults to `ayse`; unknown device → `404`.
 
 Every accepted command writes a Mongo `device_events` document: `{ homeId, deviceId, source, memberId, command, before, after, atUtc, trace_id, span_id }`.
 
