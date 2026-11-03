@@ -21,6 +21,11 @@ public sealed class AnthropicOptions
 
     [Range(1, 128_000)]
     public int MaxTokens { get; set; } = 4096;
+
+    /// <summary>API base URL. Set explicitly so an unrelated <c>ANTHROPIC_BASE_URL</c> variable is not picked up.</summary>
+    [Required]
+    [Url]
+    public string BaseUrl { get; set; } = "https://api.anthropic.com";
 }
 
 /// <summary>Validates the secret part of <see cref="AnthropicOptions"/>.</summary>
