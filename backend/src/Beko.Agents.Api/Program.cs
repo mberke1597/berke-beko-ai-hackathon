@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using Beko.Agents.Api.Hubs;
+using Beko.Agents.Application.Homes;
 using Beko.Agents.Infrastructure;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 
@@ -10,6 +12,9 @@ builder.Services.AddProblemDetails(options =>
         context.ProblemDetails.Extensions["traceId"] = Activity.Current?.TraceId.ToString() ?? context.HttpContext.TraceIdentifier);
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddInfrastructure(builder.Configuration, builder.Environment);
+builder.Services.AddSignalR();
+builder.Services.AddSingleton<IDeviceNotifier, SignalRDeviceNotifier>();
+builder.Services.AddScoped<DeviceService>();
 
 var app = builder.Build();
 
@@ -22,5 +27,6 @@ app.MapHealthChecks("/health/ready", new HealthCheckOptions
     Predicate = check => check.Tags.Contains(DependencyInjection.ReadyTag),
 });
 app.MapControllers();
+app.MapHub<DeviceHub>(DeviceHub.Path);
 
 await app.RunAsync();
