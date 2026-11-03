@@ -1,8 +1,8 @@
-using Beko.Agents.Application.Agents;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using System.Text.Json;
+using Beko.Agents.Application.Agents;
 using Beko.Agents.Application.Agents.Guardrails;
 using Beko.Agents.Application.Agents.Llm;
 using Beko.Agents.Application.Agents.Runs;
@@ -16,7 +16,7 @@ using Beko.Agents.Domain.Homes;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
-namespace Beko.Agents.Application.Tests.Agents;
+namespace Beko.Agents.TestSupport;
 
 /// <summary>Scripted <see cref="ILlmClient"/>: no network, records every request.</summary>
 public sealed class FakeLlmClient(Func<LlmRequest, int, LlmResponse> respond) : ILlmClient
@@ -450,6 +450,3 @@ public sealed class TelemetryCapture : IDisposable
         _meters.Dispose();
     }
 }
-
-[CollectionDefinition("RunTelemetry", DisableParallelization = true)]
-public sealed class RunTelemetryGroup;

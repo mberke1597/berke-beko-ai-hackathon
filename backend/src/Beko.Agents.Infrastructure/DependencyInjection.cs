@@ -9,8 +9,8 @@ using Beko.Agents.Application.Homes;
 using Beko.Agents.Application.Options;
 using Beko.Agents.Infrastructure.Agents;
 using Beko.Agents.Infrastructure.HomeWhiz;
-using Beko.Agents.Infrastructure.Llm;
 using Beko.Agents.Infrastructure.HomeWhiz.Mock;
+using Beko.Agents.Infrastructure.Llm;
 using Beko.Agents.Infrastructure.Persistence.Mongo;
 using Beko.Agents.Infrastructure.Persistence.Postgres;
 using Beko.Agents.Infrastructure.Telemetry;
@@ -113,7 +113,13 @@ public static class DependencyInjection
         services.AddSingleton(sp =>
         {
             var options = sp.GetRequiredService<IOptions<AnthropicOptions>>().Value;
-            return new AnthropicClient { ApiKey = options.ApiKey, BaseUrl = options.BaseUrl };
+            return new AnthropicClient
+            {
+                ApiKey = options.ApiKey,
+                BaseUrl = options.BaseUrl,
+                Timeout = AnthropicLlmClient.DefaultTimeout,
+                MaxRetries = AnthropicLlmClient.DefaultMaxRetries,
+            };
         });
         services.AddSingleton<ILlmClient, AnthropicLlmClient>();
         services.AddSingleton<ICostCalculator, CostCalculator>();

@@ -9,5 +9,6 @@
     <Project Path="tests/Beko.Agents.Api.IntegrationTests/Beko.Agents.Api.IntegrationTests.csproj" />
     <Project Path="tests/Beko.Agents.Application.Tests/Beko.Agents.Application.Tests.csproj" />
     <Project Path="tests/Beko.Agents.Infrastructure.Tests/Beko.Agents.Infrastructure.Tests.csproj" />
+    <Project Path="tests/Beko.Agents.TestSupport/Beko.Agents.TestSupport.csproj" />
   </Folder>
 </Solution>

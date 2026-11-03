@@ -13,6 +13,12 @@ namespace Beko.Agents.Infrastructure.Llm;
 /// </summary>
 public sealed class AnthropicLlmClient(AnthropicClient client) : ILlmClient
 {
+    /// <summary>Default request timeout: a run should end well inside the chat UI's wait for an answer.</summary>
+    public static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(30);
+
+    /// <summary>The SDK retries connection errors, 408, 409, 429 and 5xx; one retry keeps a failing run short.</summary>
+    public const int DefaultMaxRetries = 1;
+
     public async Task<LlmResponse> CompleteAsync(LlmRequest request, Func<string, Task>? onTextDelta, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -23,7 +29,15 @@ public sealed class AnthropicLlmClient(AnthropicClient client) : ILlmClient
         var stopReason = string.Empty;
         long inputTokens = 0, outputTokens = 0, cacheRead = 0, cacheWrite = 0;
 
-        await foreach (var streamEvent in client.Messages.CreateStreaming(parameters, cancellationToken))
+        var messages = request.Timeout is null && request.MaxRetries is null
+            ? client.Messages
+            : client.WithOptions(options => options with
+            {
+                Timeout = request.Timeout ?? options.Timeout,
+                MaxRetries = request.MaxRetries ?? options.MaxRetries,
+            }).Messages;
+
+        await foreach (var streamEvent in messages.CreateStreaming(parameters, cancellationToken))
         {
             if (streamEvent.TryPickStart(out var start))
             {

@@ -17,7 +17,9 @@ public sealed record LlmRequest(
     string System,
     IReadOnlyList<LlmMessage> Messages,
     IReadOnlyList<LlmToolDefinition> Tools,
-    int MaxTokens);
+    int MaxTokens,
+    TimeSpan? Timeout = null,
+    int? MaxRetries = null);
 
 public static class LlmRoles
 {

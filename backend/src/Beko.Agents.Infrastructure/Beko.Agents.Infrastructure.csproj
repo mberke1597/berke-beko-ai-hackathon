@@ -22,4 +22,8 @@
     <PackageReference Include="OpenTelemetry.Instrumentation.Http" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="Beko.Agents.Infrastructure.Tests" />
+  </ItemGroup>
+
 </Project>
