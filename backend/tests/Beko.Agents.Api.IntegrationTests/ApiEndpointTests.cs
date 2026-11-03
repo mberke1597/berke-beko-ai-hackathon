@@ -70,9 +70,9 @@ public sealed class ApiEndpointTests(WebApplicationFactory<Program> factory) : I
     {
         using var productionFactory = CreateProductionFactory(apiKey: "", signingKey: "0123456789abcdef0123456789abcdef");
 
-        var exception = Assert.Throws<AggregateException>(() => productionFactory.CreateClient());
+        var exception = Record.Exception(() => productionFactory.CreateClient());
 
-        Assert.Contains("Anthropic:ApiKey is required.", exception.Failures);
+        Assert.Contains("Anthropic:ApiKey is required.", GetOptionsValidationFailures(exception));
     }
 
     [Fact]
@@ -80,9 +80,24 @@ public sealed class ApiEndpointTests(WebApplicationFactory<Program> factory) : I
     {
         using var productionFactory = CreateProductionFactory(apiKey: "test-key", signingKey: "");
 
-        var exception = Assert.Throws<AggregateException>(() => productionFactory.CreateClient());
+        var exception = Record.Exception(() => productionFactory.CreateClient());
 
-        Assert.Contains("Jwt:SigningKey is required.", exception.Failures);
+        Assert.Contains("Jwt:SigningKey is required.", GetOptionsValidationFailures(exception));
+    }
+
+    /// <summary>
+    /// <c>ValidateOnStart</c> throws a single <see cref="OptionsValidationException"/> when one options type fails
+    /// and an <see cref="AggregateException"/> of them when several fail; collect the messages in both cases.
+    /// </summary>
+    private static List<string> GetOptionsValidationFailures(Exception? exception)
+    {
+        Assert.NotNull(exception);
+
+        var exceptions = exception is AggregateException aggregate ? aggregate.Flatten().InnerExceptions : [exception];
+        var failures = exceptions.OfType<OptionsValidationException>().SelectMany(e => e.Failures).ToList();
+
+        Assert.NotEmpty(failures);
+        return failures;
     }
 
     private WebApplicationFactory<Program> CreateProductionFactory(string apiKey, string signingKey) =>
