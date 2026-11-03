@@ -7,6 +7,7 @@ import { acModeLabel, formatPercent, formatTemp, programWithTemp, toneLabel } fr
 import type { ChatApi } from "../chat/api.ts";
 import type { ConnectRunLive, RunLiveHandlers } from "../chat/run-live.ts";
 import type { ChatAction, ChatMessage, RunDetail, RunEvent, Step, Totals } from "../chat/types.ts";
+import type { RunSummary } from "../slice2/types.ts";
 import type { DeviceCommand } from "../types.ts";
 import type { MockHome } from "./simulator.ts";
 
@@ -31,15 +32,28 @@ function cost(input: number, output: number): number {
   return Number(((input * PRICE_IN_PER_MTOK + output * PRICE_OUT_PER_MTOK) / 1_000_000).toFixed(6));
 }
 
+export interface MockAgentStats {
+  runs: RunSummary[];
+  tools: { tool: string; calls: number; errors: number }[];
+  conversations: number;
+  tokens: number;
+}
+
 export interface MockAgent {
   chat: ChatApi;
   connectRunLive: ConnectRunLive;
+  /** Run history and tool usage, for the mock dashboard. */
+  stats(): MockAgentStats;
 }
 
 export function createMockAgent(home: MockHome, options: MockAgentOptions = {}): MockAgent {
   const { stepDelayMs = 220, now = () => new Date() } = options;
   const conversations = new Map<string, ChatMessage[]>();
+  const conversationMembers = new Map<string, string>();
   const runs = new Map<string, RunDetail>();
+  const summaries: RunSummary[] = [];
+  const toolCounts = new Map<string, { calls: number; errors: number }>();
+  let tokenTotal = 0;
   const listeners = new Map<string, Set<RunLiveHandlers>>();
   let counter = 0;
   const nextId = (prefix: string): string => `${prefix}-${String(Date.now())}-${String(++counter)}`;
@@ -184,7 +198,12 @@ export function createMockAgent(home: MockHome, options: MockAgentOptions = {}):
       const tTool = await startStep(tool);
       let accepted = true;
       try {
-        await home.api.sendCommand(intent.applianceId, { type: intent.command.type, value: intent.command.value, source: "ai", memberId: "ayse" });
+        await home.api.sendCommand(intent.applianceId, {
+          type: intent.command.type,
+          value: intent.command.value,
+          source: "ai",
+          memberId: conversationMembers.get(conversationId) ?? "ayse",
+        });
       } catch {
         accepted = false;
       }
@@ -218,6 +237,24 @@ export function createMockAgent(home: MockHome, options: MockAgentOptions = {}):
       durationMs: Date.now() - started,
     };
     const actions = action ? [action] : [];
+    for (const s of steps.filter((x) => x.type === "tool.call")) {
+      const count = toolCounts.get(s.name) ?? { calls: 0, errors: 0 };
+      count.calls += 1;
+      if (action && !action.accepted && s.name === "control_device") count.errors += 1;
+      toolCounts.set(s.name, count);
+    }
+    tokenTotal += totals.inputTokens + totals.outputTokens;
+    summaries.unshift({
+      runId,
+      conversationId,
+      agentId: "celiknaz",
+      status: "completed",
+      startedAtUtc: new Date(started).toISOString(),
+      durationMs: totals.durationMs,
+      costUsd: totals.costUsd,
+      traceId: detail.traceId,
+      userText: text,
+    });
     detail.status = "completed";
     detail.durationMs = totals.durationMs;
     detail.totals = totals;
@@ -235,9 +272,10 @@ export function createMockAgent(home: MockHome, options: MockAgentOptions = {}):
   const notFound = (): ApiError => new ApiError("http", 404, { status: 404, title: "Not found" });
 
   const chat: ChatApi = {
-    createConversation: (agentId) => {
+    createConversation: (agentId, memberId) => {
       const conversationId = nextId("conv");
       conversations.set(conversationId, []);
+      conversationMembers.set(conversationId, memberId);
       return Promise.resolve({ conversationId, agentId, createdAtUtc: now().toISOString() });
     },
     getMessages: (conversationId) => {
@@ -275,5 +313,14 @@ export function createMockAgent(home: MockHome, options: MockAgentOptions = {}):
     };
   };
 
-  return { chat, connectRunLive };
+  return {
+    chat,
+    connectRunLive,
+    stats: () => ({
+      runs: structuredClone(summaries),
+      tools: [...toolCounts.entries()].map(([tool, c]) => ({ tool, ...c })),
+      conversations: conversations.size,
+      tokens: tokenTotal,
+    }),
+  };
 }

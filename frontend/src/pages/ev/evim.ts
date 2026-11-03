@@ -1,4 +1,4 @@
-import { el } from "../../components/dom.ts";
+import { el, setChildren } from "../../components/dom.ts";
 import { sendDeviceCommand } from "../../home/actions.ts";
 import { icon } from "../../home/icons.ts";
 import { formatTemp } from "../../home/labels.ts";
@@ -10,8 +10,8 @@ import { createApplianceCard, type CardHandlers } from "./appliance-card.ts";
 import { loadHome } from "./common.ts";
 import { showToast } from "./toast.ts";
 
-/** Placeholder until the weather mock exists (backend `Simulation__OutdoorTempC` default). */
-export const PLACEHOLDER_OUTDOOR_TEMP_C = 31;
+/** How often the home context (outdoor temperature, priority mode, presence) is refreshed while Evim is open. */
+const CONTEXT_REFRESH_MS = 20_000;
 
 const ALL = "all";
 let selectedRoom = ALL;
@@ -32,6 +32,8 @@ export function renderEvim(main: HTMLElement, session: HomeSession): () => void 
   const region = el("div", { class: "ev-screen" });
   main.replaceChildren(region);
   let unsubscribe: (() => void) | undefined;
+  let unsubscribeS2: (() => void) | undefined;
+  let contextTimer: ReturnType<typeof setInterval> | undefined;
   let isMock = false;
 
   const handlers: CardHandlers = {
@@ -48,11 +50,22 @@ export function renderEvim(main: HTMLElement, session: HomeSession): () => void 
     const live = el("span", { class: "ev-live" });
     renderLive(live, session.store.live);
 
-    const strip = el("div", { class: "ev-strip" }, [
-      el("span", { class: "ev-strip__item" }, [icon("sun", "icon icon--sm"), tr.home.statusStrip.outdoor(formatTemp(PLACEHOLDER_OUTDOOR_TEMP_C))]),
-      el("span", { class: "ev-strip__item" }, [icon("leaf", "icon icon--sm"), tr.home.statusStrip.priority(tr.home.statusStrip.priorityModes.saving)]),
-      el("span", { class: "ev-strip__end" }, [isMock && el("span", { class: "badge badge--neutral" }, [tr.home.mockBadge]), live]),
-    ]);
+    const strip = el("div", { class: "ev-strip" });
+    const drawStrip = (): void => {
+      const context = session.s2.context;
+      setChildren(strip, [
+        el("span", { class: "ev-strip__item" }, [
+          icon("sun", "icon icon--sm"),
+          context ? tr.home.statusStrip.outdoor(formatTemp(context.outdoorTempC)) : tr.home.statusStrip.loading,
+        ]),
+        el("span", { class: "ev-strip__item" }, [
+          icon("leaf", "icon icon--sm"),
+          context ? tr.home.statusStrip.priority(tr.home.statusStrip.priorityModes[context.priorityMode]) : tr.home.statusStrip.loading,
+        ]),
+        el("span", { class: "ev-strip__end" }, [isMock && el("span", { class: "badge badge--neutral" }, [tr.home.mockBadge]), live]),
+      ]);
+    };
+    drawStrip();
 
     if (selectedRoom !== ALL && !view.rooms.some((r) => r.id === selectedRoom)) selectedRoom = ALL;
 
@@ -104,6 +117,10 @@ export function renderEvim(main: HTMLElement, session: HomeSession): () => void 
     region.replaceChildren(strip, chips, sections);
 
     unsubscribe?.();
+    unsubscribeS2?.();
+    unsubscribeS2 = session.s2.subscribe((change) => {
+      if (change.kind === "context") drawStrip();
+    });
     unsubscribe = session.store.subscribe((change) => {
       if (change.kind === "appliance" || change.kind === "aiTag") {
         const id = change.kind === "appliance" ? change.appliance.id : change.applianceId;
@@ -131,6 +148,9 @@ export function renderEvim(main: HTMLElement, session: HomeSession): () => void 
 
   loadHome(session, region, () => {
     const view = session.store.home;
+    contextTimer ??= setInterval(() => {
+      void session.s2.refreshContext().catch(() => undefined);
+    }, CONTEXT_REFRESH_MS);
     if (view) {
       void session.backend().then((b) => {
         isMock = b.isMock;
@@ -141,5 +161,7 @@ export function renderEvim(main: HTMLElement, session: HomeSession): () => void 
 
   return () => {
     unsubscribe?.();
+    unsubscribeS2?.();
+    if (contextTimer !== undefined) clearInterval(contextTimer);
   };
 }

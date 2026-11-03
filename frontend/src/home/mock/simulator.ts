@@ -4,7 +4,7 @@
 import { ApiError } from "../../api/errors.ts";
 import type { HomeApi } from "../api.ts";
 import { buildCommand, defaultProgramTemp } from "../commands.ts";
-import type { ConnectLive, LiveHandlers } from "../live.ts";
+import { dispatchExtra, type ConnectLive, type LiveExtra, type LiveHandlers } from "../live.ts";
 import type {
   Appliance,
   ApplianceEvent,
@@ -32,6 +32,12 @@ export interface MockHome {
   connectLive: ConnectLive;
   /** Advances the simulation by one tick. */
   tick(): void;
+  /** Sends a slice 2 event (task, notification, comfort question) to the connected clients. */
+  emitExtra(extra: LiveExtra): void;
+  /** Observes every accepted command (used by the mock engine for comfort questions and statistics). */
+  onCommand(listener: (appliance: Appliance, request: CommandRequest) => void): () => void;
+  /** Observes simulator ticks (energy, presence). */
+  onTick(listener: () => void): () => void;
   /** Current state (copy), for tests. */
   snapshot(): HomeView;
   dispose(): void;
@@ -58,6 +64,8 @@ export function createMockHome(options: MockHomeOptions = {}): MockHome {
   const { tickMs = 2000, minutesPerTick = 1, latencyMs = 120, now = () => new Date() } = options;
   const home = createDemoHome();
   const listeners = new Set<LiveHandlers>();
+  const commandListeners = new Set<(appliance: Appliance, request: CommandRequest) => void>();
+  const tickListeners = new Set<() => void>();
   const preheated = new Set<string>();
 
   const find = (id: string): Appliance | undefined => home.appliances.find((a) => a.id === id);
@@ -138,8 +146,10 @@ export function createMockHome(options: MockHomeOptions = {}): MockHome {
       case "start_program": {
         if (s.status === "running" || s.status === "paused") throw problem(422, "Program already running", "invalid_state");
         const profile = findProgram(appliance.type, command.value.program);
+        const startAt = command.value.startAtUtc === null ? Number.NaN : Date.parse(command.value.startAtUtc);
+        const delayed = !Number.isNaN(startAt) && startAt > now().getTime();
         s.power = true;
-        s.status = "running";
+        s.status = delayed ? "idle" : "running";
         s.program = {
           program: command.value.program,
           temperatureC: command.value.temperatureC ?? profile?.temperatureC ?? defaultProgramTemp(command.value.program),
@@ -215,6 +225,11 @@ export function createMockHome(options: MockHomeOptions = {}): MockHome {
       }
     }
 
+    if (s.program && s.status === "idle" && s.program.startAtUtc !== null && Date.parse(s.program.startAtUtc) <= now().getTime()) {
+      s.status = "running";
+      s.program = { ...s.program, startAtUtc: null };
+    }
+
     if (s.program && s.status === "running") {
       const p = s.program;
       const remaining = Math.max(0, p.remainingMin - minutesPerTick);
@@ -251,6 +266,7 @@ export function createMockHome(options: MockHomeOptions = {}): MockHome {
   }
 
   function tick(): void {
+    for (const l of [...tickListeners]) l();
     for (const appliance of home.appliances) {
       const before = JSON.stringify(appliance.state);
       const event = step(appliance);
@@ -281,6 +297,7 @@ export function createMockHome(options: MockHomeOptions = {}): MockHome {
     }
     apply(appliance, command);
     broadcast(appliance);
+    for (const l of [...commandListeners]) l(clone(appliance), request);
     return { commandId: `mock-${String(Date.now())}`, accepted: true, appliance: clone(appliance) };
   }
 
@@ -339,10 +356,23 @@ export function createMockHome(options: MockHomeOptions = {}): MockHome {
     api,
     connectLive,
     tick,
+    emitExtra: (extra) => {
+      for (const l of [...listeners]) dispatchExtra(l, extra);
+    },
+    onCommand: (listener) => {
+      commandListeners.add(listener);
+      return () => commandListeners.delete(listener);
+    },
+    onTick: (listener) => {
+      tickListeners.add(listener);
+      return () => tickListeners.delete(listener);
+    },
     snapshot: () => clone(home),
     dispose: () => {
       if (timer !== undefined) clearInterval(timer);
       listeners.clear();
+      commandListeners.clear();
+      tickListeners.clear();
     },
   };
 }

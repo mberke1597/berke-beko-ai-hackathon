@@ -19,6 +19,11 @@ export function el<K extends keyof HTMLElementTagNameMap>(
   return node;
 }
 
+/** Replaces the children of `parent`, skipping `false`, `null` and `undefined` entries. */
+export function setChildren(parent: Element, children: readonly Child[]): void {
+  parent.replaceChildren(...children.filter((c): c is Node | string => c !== null && c !== undefined && c !== false));
+}
+
 /** Path of the trimmed blue Beko logo (117x70 px, transparent background). */
 export const logoSrc = `${import.meta.env.BASE_URL}brand/beko-logo-trimmed.png`;
 export const LOGO_WIDTH = 117;

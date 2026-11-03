@@ -8,6 +8,13 @@ export type StateTone = "off" | "idle" | "running" | "paused" | "finished" | "er
 
 const numberFormat = new Intl.NumberFormat("tr-TR", { maximumFractionDigits: 1 });
 
+/** "2026-11-03T10:05:00Z" -> local "13:05" (device local time; simulator time is never compared with now). */
+export function formatClock(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("tr-TR", { hour: "2-digit", minute: "2-digit" }).format(date);
+}
+
 /** "24.8" -> "24,8" (Turkish decimal comma). */
 export function formatNumber(value: number): string {
   return numberFormat.format(value);
@@ -115,7 +122,10 @@ export function cardSummary(appliance: Appliance): CardSummary {
     }
     if (tone === "finished") return { primary: tr.home.card.finished, secondary: name, progressPct: 100 };
     // Idle keeps the selected program (contract): show it as the secondary line.
-    if (tone === "idle") return { primary: toneLabel(appliance), secondary: name, progressPct: undefined };
+    if (tone === "idle") {
+      const scheduled = p.startAtUtc === null ? "" : formatClock(p.startAtUtc);
+      return { primary: toneLabel(appliance), secondary: scheduled === "" ? name : tr.home.card.scheduled(scheduled), progressPct: undefined };
+    }
     return { primary: toneLabel(appliance), secondary: undefined, progressPct: undefined };
   }
 
