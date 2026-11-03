@@ -18,7 +18,7 @@ Source of truth shared by backend, frontend and infra. Only the lead changes thi
 
 - Kubernetes namespace: `beko`.
 - Images: `ghcr.io/mberke1597/beko-backend:<git-sha>`, `ghcr.io/mberke1597/beko-frontend:<git-sha>` (plus `:latest` on `main`). Platform `linux/arm64`; CI and local Compose may also build `linux/amd64`.
-- Public URL: `https://<VM-IP>.sslip.io` (TLS by cert-manager + Let's Encrypt, Traefik ingress built into k3s).
+- Public URL: `https://<label>.<region>.cloudapp.azure.com` (Azure public IP DNS label; fallback `https://<VM-IP>.sslip.io`). TLS by cert-manager + Let's Encrypt, Traefik ingress built into k3s.
 
 ## Routing (same origin, no CORS needed in production)
 

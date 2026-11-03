@@ -22,12 +22,12 @@ flowchart LR
 
 ## 2. Containers (what runs)
 
-All of this runs on **one Oracle Cloud Ampere A1 VM** (2 OCPU / 12 GB, linux/arm64) under k3s, and locally with Docker Compose.
+All of this runs on **one Azure Linux VM** (Pay-As-You-Go, size to be confirmed, about 4 vCPU / 16 GB) under k3s, and locally with Docker Compose.
 
 ```mermaid
 flowchart TB
   Browser[Browser<br/>Vite + TS app, Turkish UI]
-  subgraph VM["Oracle A1 VM — k3s, namespace beko"]
+  subgraph VM["Azure VM — k3s, namespace beko"]
     Traefik[Traefik ingress<br/>TLS via cert-manager]
     FE[frontend<br/>nginx, static build]
     BE[backend<br/>ASP.NET Core .NET 10]
@@ -162,7 +162,7 @@ flowchart LR
 
 - Images: `ghcr.io/mberke1597/beko-backend`, `beko-frontend`, built for `linux/arm64` on native ARM GitHub runners.
 - `dev` / PRs: build, lint, test. `main`: build → push to GHCR → SSH to the VM → apply manifests → `kubectl rollout status`.
-- Public URL: `https://<VM-IP>.sslip.io` with a Let's Encrypt certificate from cert-manager; Traefik routes by path.
+- Public URL: `https://<label>.<region>.cloudapp.azure.com` (Azure DNS label, fallback sslip.io) with a Let's Encrypt certificate from cert-manager; Traefik routes by path.
 - Memory budget: all pods have requests/limits, about 6.8 GB of limits in total (Proposal §5).
 
 Diagram: [../diagrams/07-deployment.md](../diagrams/07-deployment.md).

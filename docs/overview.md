@@ -87,11 +87,11 @@ There is no real HomeWhiz or device access during the hackathon, so:
 
 ## 7. Technology
 
-.NET 10 (ASP.NET Core controllers, Clean Architecture) · official `Anthropic` C# SDK (`claude-sonnet-5-5`, `claude-haiku-5-5`) · Vite + TypeScript, no UI framework, Turkish UI · PostgreSQL + MongoDB · OpenTelemetry → Collector → Prometheus / Tempo / Loki → Grafana · Docker (linux/arm64) · k3s on one Oracle Cloud Ampere A1 VM (Milan) · GitHub Actions CI/CD.
+.NET 10 (ASP.NET Core controllers, Clean Architecture) · official `Anthropic` C# SDK (`claude-sonnet-5-5`, `claude-haiku-5-5`) · Vite + TypeScript, no UI framework, Turkish UI · PostgreSQL + MongoDB · OpenTelemetry → Collector → Prometheus / Tempo / Loki → Grafana · Docker · k3s on one Azure Linux VM (Pay-As-You-Go) · GitHub Actions CI/CD.
 
 ## 8. How it reaches people
 
-`git push` to `main` → GitHub Actions builds arm64 images → GHCR → SSH deploy to the Oracle VM → k3s rolls out. Users open `https://<VM-IP>.sslip.io` (free TLS by Let's Encrypt) and sign in with accounts an admin added to the `users` table. See [diagrams/07-deployment.md](diagrams/07-deployment.md).
+`git push` to `main` → GitHub Actions builds arm64 images → GHCR → SSH deploy to the Azure VM → k3s rolls out. Users open `https://<label>.<region>.cloudapp.azure.com` (free TLS by Let's Encrypt) and sign in with accounts an admin added to the `users` table. See [diagrams/07-deployment.md](diagrams/07-deployment.md).
 
 ## 9. Why the jury should care
 
