@@ -85,4 +85,63 @@
   --logo-height-header: 34px;
   --content-max-width: 960px;
   --transition-fast: 120ms ease;
+
+  /* Çeliknaz home app (consumer, HomeWhiz-like). Re-skin here once real screenshots exist. */
+  --color-app-bg: #eef2f6;
+  --color-app-desktop-bg: #dfe5ec;
+  --color-app-surface: var(--color-white);
+  --color-app-header-bg: var(--color-white);
+  --color-tab-inactive: var(--color-grey-500);
+  --color-tab-active: var(--color-primary);
+  --color-overlay: rgb(22 27 32 / 55%);
+  --color-toast-bg: var(--color-grey-900);
+  --color-on-toast: var(--color-white);
+
+  /* Appliance states (always paired with a text label and an icon) */
+  --color-state-off: var(--color-grey-500);
+  --color-state-off-subtle: var(--color-grey-100);
+  --color-state-idle: var(--color-grey-700);
+  --color-state-idle-subtle: var(--color-grey-100);
+  --color-state-running: var(--color-primary);
+  --color-state-running-subtle: var(--color-primary-subtle);
+  --color-state-paused: var(--color-warning);
+  --color-state-paused-subtle: var(--color-warning-subtle);
+  --color-state-finished: var(--color-success);
+  --color-state-finished-subtle: var(--color-success-subtle);
+  --color-state-error: var(--color-danger);
+  --color-state-error-subtle: var(--color-danger-subtle);
+
+  /* Member avatars */
+  --color-avatar-1: #e86a92;
+  --color-avatar-2: #2e7dd7;
+  --color-avatar-3: #f2a33a;
+  --color-on-avatar: var(--color-white);
+
+  /* Charts */
+  --color-chart-temp: #f06b2c;
+  --color-chart-humidity: var(--color-primary);
+  --color-chart-grid: var(--color-grey-200);
+
+  --radius-xl: 16px;
+  --radius-2xl: 24px;
+  --shadow-card: 0 1px 3px rgb(22 27 32 / 8%), 0 1px 1px rgb(22 27 32 / 4%);
+  --shadow-fab: 0 6px 16px rgb(0 137 207 / 40%);
+  --shadow-bar: 0 -1px 0 var(--color-grey-200), 0 -4px 12px rgb(22 27 32 / 4%);
+
+  --font-size-3xl: 2.75rem;
+  --font-size-2xs: 0.625rem;
+  --space-0-5: 2px;
+  --font-weight-bold: 700;
+
+  --app-max-width: 430px;
+  --app-header-height: 60px;
+  --tabbar-height: 64px;
+  --fab-size: 60px;
+  --icon-xs: 14px;
+  --icon-sm: 18px;
+  --icon-md: 22px;
+  --icon-lg: 28px;
+  --icon-xl: 40px;
+  --touch-target: 44px;
+  --transition-normal: 200ms ease;
 }
