@@ -1,5 +1,9 @@
-# Full local stack. Copy .env.example to .env first, then: docker compose up -d --build
-# App: http://localhost:8081  API: http://localhost:5080  Grafana: http://localhost:3000/grafana/  Prometheus: http://localhost:9090
+# Local stack. Copy .env.example to .env first.
+#   docker compose up -d                      infrastructure only (postgres, mongodb, otel-collector,
+#                                             prometheus, tempo, loki, grafana); run backend and frontend
+#                                             from source: dotnet run / npm run dev (make demo does it all)
+#   docker compose --profile full up -d --build   everything, including the built backend and frontend images
+# App (full profile): http://localhost:8081  API: http://localhost:5080  Grafana: http://localhost:3000/grafana/  Prometheus: http://localhost:9090
 name: beko
 
 x-logging: &logging
@@ -12,6 +16,7 @@ services:
       context: .
       dockerfile: deploy/docker/backend.Dockerfile
     image: ghcr.io/mberke1597/beko-backend:local
+    profiles: [full]
     environment:
       ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Development}
       ASPNETCORE_HTTP_PORTS: "8080"
@@ -50,6 +55,7 @@ services:
       context: .
       dockerfile: deploy/docker/frontend.Dockerfile
     image: ghcr.io/mberke1597/beko-frontend:local
+    profiles: [full]
     environment:
       BACKEND_UPSTREAM: backend:8080
     ports: ["8081:80"]
@@ -69,7 +75,7 @@ services:
       POSTGRES_DB: beko
       POSTGRES_USER: beko
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-    ports: ["5432:5432"]
+    ports: ["127.0.0.1:${POSTGRES_HOST_PORT:-5432}:5432"]  # override when a local Postgres already uses 5432
     volumes: [postgres-data:/var/lib/postgresql/data]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U beko -d beko"]
@@ -86,7 +92,7 @@ services:
     environment:
       MONGO_INITDB_ROOT_USERNAME: beko
       MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
-    ports: ["27017:27017"]
+    ports: ["127.0.0.1:${MONGO_HOST_PORT:-27017}:27017"]  # override when a local MongoDB already uses 27017
     volumes: [mongo-data:/data/db]
     healthcheck:
       test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
