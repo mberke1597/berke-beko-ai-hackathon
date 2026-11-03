@@ -155,4 +155,20 @@
   --color-timeline-line: var(--color-grey-300);
   --chat-max-bubble: 85%;
   --timeline-indent: var(--space-4);
+
+  /* Çeliknaz slice 2: charts, command sources, presence, panel layout */
+  --color-chart-override: #e0782a;
+  --color-chart-good: var(--color-success);
+  --color-source-voice: #8e5bd9;
+  --color-source-app: var(--color-primary);
+  --color-source-remote: #2aa7a1;
+  --color-source-ai: var(--color-ai-tag);
+  --color-source-schedule: #b26a00;
+  --opacity-away: 0.45;
+  --color-feel-cold: #2e7dd7;
+  --color-feel-ok: var(--color-success);
+  --color-feel-hot: #e0782a;
+  --panel-max-width: 1280px;
+  --panel-tile-min: 190px;
+  --panel-gap: 1rem;
 }

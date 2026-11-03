@@ -1,4 +1,9 @@
+import { commandErrorMessage } from "../../home/api.ts";
 import { el } from "../../components/dom.ts";
+import { formatKwh, formatTl } from "../../home/slice2/logic.ts";
+import { paths } from "../../paths.ts";
+import { hrefFor } from "../../router.ts";
+import { showToast } from "./toast.ts";
 import type { ChatController } from "../../home/chat/controller.ts";
 import { icon } from "../../home/icons.ts";
 import type { HomeSession } from "../../home/session.ts";
@@ -41,12 +46,58 @@ export function renderAssistant(main: HTMLElement, session: HomeSession): () => 
     voice,
   ]);
 
+  const suggestions = el("div", { class: "ev-stack" });
+  const energyLine = el("p", { class: "ev-energyline", hidden: true });
+
+  /** Unread suggestion notifications as insight cards with Evet / Hayır. */
+  const drawSuggestions = (): void => {
+    const items = session.s2.notifications.filter((n) => n.kind === "suggestion" && n.action !== null && !n.read).slice(0, 2);
+    if (items.length === 0) {
+      suggestions.replaceChildren(el("p", { class: "ev-muted" }, [a.suggestionsEmpty]));
+      return;
+    }
+    suggestions.replaceChildren(
+      ...items.map((n) => {
+        const routineId = n.action?.routineId ?? "";
+        const decide = (accept: boolean, buttons: HTMLButtonElement[]): void => {
+          for (const b of buttons) b.disabled = true;
+          void session.backend().then(async (b) => {
+            try {
+              if (accept) await b.slice2.acceptRoutine(routineId);
+              else await b.slice2.rejectRoutine(routineId);
+              showToast(a.suggestionDone, "success");
+              await session.s2.markRead(n.id);
+            } catch (error) {
+              for (const button of buttons) button.disabled = false;
+              showToast(commandErrorMessage(error), "error");
+            }
+          });
+        };
+        const yes = el("button", { type: "button", class: "button button--primary button--sm" }, [a.yes]);
+        const no = el("button", { type: "button", class: "button button--secondary button--sm" }, [a.no]);
+        yes.addEventListener("click", () => {
+          decide(true, [yes, no]);
+        });
+        no.addEventListener("click", () => {
+          decide(false, [yes, no]);
+        });
+        return el("article", { class: "ev-insight" }, [el("p", { class: "ev-insight__text" }, [n.text]), el("div", { class: "ev-actions" }, [yes, no])]);
+      }),
+    );
+  };
+
   main.replaceChildren(
     el("div", { class: "ev-screen ev-screen--chat" }, [
       el("div", { class: "ev-screen__head" }, [el("h1", { class: "ev-screen__title" }, [icon("sparkle", "icon ev-brand-icon"), a.title])]),
       el("section", { class: "ev-panel ev-panel--compact", "aria-labelledby": "assistant-suggestions" }, [
         el("h2", { id: "assistant-suggestions", class: "ev-panel__title" }, [a.suggestionsTitle]),
-        el("p", { class: "ev-muted" }, [a.suggestionsEmpty]),
+        suggestions,
+        energyLine,
+      ]),
+      el("a", { class: "ev-link-row ev-link-row--link", href: hrefFor(paths.evLearning) }, [
+        icon("sparkle", "icon icon--sm"),
+        el("span", {}, [a.learned]),
+        icon("chevron", "icon icon--sm ev-link-row__chevron"),
       ]),
       el("section", { class: "ev-chat", "aria-labelledby": "assistant-chat" }, [
         el("h2", { id: "assistant-chat", class: "visually-hidden" }, [a.chatTitle]),
@@ -106,6 +157,24 @@ export function renderAssistant(main: HTMLElement, session: HomeSession): () => 
     });
   };
 
+  drawSuggestions();
+  const unsubscribeS2 = session.s2.subscribe((change) => {
+    if (change.kind === "notifications" || change.kind === "member") drawSuggestions();
+  });
+  void session.backend().then(
+    async (b) => {
+      try {
+        const energy = await b.slice2.getEnergy();
+        if (disposed) return;
+        energyLine.hidden = false;
+        energyLine.replaceChildren(icon("leaf", "icon icon--sm"), a.energyWeek(formatKwh(energy.savedWeekKwh), formatTl(energy.savedWeekTl)));
+      } catch {
+        // The energy line is optional.
+      }
+    },
+    () => undefined,
+  );
+
   const start = (): void => {
     renderLoading(status, tr.home.chat.connecting);
     // Appliance names for chips and the default member come from the home.
@@ -143,5 +212,6 @@ export function renderAssistant(main: HTMLElement, session: HomeSession): () => 
   return () => {
     disposed = true;
     unsubscribe?.();
+    unsubscribeS2();
   };
 }

@@ -9,10 +9,15 @@ import { tr } from "./i18n/tr.ts";
 import { renderAssistant } from "./pages/ev/assistant.ts";
 import { renderDetail } from "./pages/ev/detail.ts";
 import { renderEvim } from "./pages/ev/evim.ts";
+import { renderLearning } from "./pages/ev/learning.ts";
+import { renderNotifications } from "./pages/ev/notifications.ts";
+import { renderRules } from "./pages/ev/rules.ts";
+import { renderSettings } from "./pages/ev/settings.ts";
 import { renderEvShell } from "./pages/ev/shell.ts";
 import { renderTasks } from "./pages/ev/tasks.ts";
 import { renderLoginPage } from "./pages/login.ts";
 import { renderNotFoundPage } from "./pages/not-found.ts";
+import { renderPanel } from "./pages/panel.ts";
 import { renderStatusPage } from "./pages/status.ts";
 import { paths } from "./paths.ts";
 import { Router } from "./router.ts";
@@ -49,6 +54,26 @@ const router: Router = new Router({
     [paths.evAssistant]: () => {
       setScreen(`${tr.home.tabs.assistant} · ${tr.home.appName}`, true);
       return renderAssistant(renderEvShell(root, homeSession(), "assistant"), homeSession());
+    },
+    [paths.evRules]: () => {
+      setScreen(`${tr.home.rules.title} · ${tr.home.appName}`, true);
+      return renderRules(renderEvShell(root, homeSession(), null), homeSession());
+    },
+    [paths.evSettings]: () => {
+      setScreen(`${tr.home.settings.title} · ${tr.home.appName}`, true);
+      return renderSettings(renderEvShell(root, homeSession(), null), homeSession());
+    },
+    [paths.evNotifications]: () => {
+      setScreen(`${tr.home.notif.title} · ${tr.home.appName}`, true);
+      return renderNotifications(renderEvShell(root, homeSession(), null), homeSession());
+    },
+    [paths.evLearning]: () => {
+      setScreen(`${tr.home.learn.title} · ${tr.home.appName}`, true);
+      return renderLearning(renderEvShell(root, homeSession(), null), homeSession());
+    },
+    [paths.panel]: () => {
+      setScreen(tr.home.panel.pageTitle, true);
+      return renderPanel(root, homeSession());
     },
     [paths.evDevicePattern]: (params) => {
       setScreen(tr.home.appName, true);
