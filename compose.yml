@@ -1,5 +1,5 @@
 # Full local stack. Copy .env.example to .env first, then: docker compose up -d --build
-# App: http://localhost:8081  Grafana: http://localhost:3000/grafana/  Prometheus: http://localhost:9090
+# App: http://localhost:8081  API: http://localhost:5080  Grafana: http://localhost:3000/grafana/  Prometheus: http://localhost:9090
 name: beko
 
 x-logging: &logging
@@ -30,6 +30,11 @@ services:
       App__Version: ${APP_VERSION:-0.1.0}
       App__Commit: ${APP_COMMIT:-local}
       App__GrafanaBaseUrl: http://localhost:3000/grafana
+      # Çeliknaz slice 1: the mock HomeWhiz API is served by the backend itself.
+      HomeWhiz__BaseUrl: http://localhost:8080/api/mock/homewhiz
+      Simulation__TimeScale: ${SIMULATION_TIME_SCALE:-1}
+      Simulation__TickSeconds: ${SIMULATION_TICK_SECONDS:-5}
+      Simulation__OutdoorTempC: ${SIMULATION_OUTDOOR_TEMP_C:-31}
     ports: ["5080:8080"]
     depends_on:
       postgres: { condition: service_healthy }
@@ -161,6 +166,7 @@ services:
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
       GF_ANALYTICS_REPORTING_ENABLED: "false"
       GF_FEATURE_TOGGLES_ENABLE: traceqlEditor
+      GF_PLUGINS_PREINSTALL_AUTO_UPDATE: "false"   # keep bundled plugin versions, no download on start
     volumes:
       - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
       - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro

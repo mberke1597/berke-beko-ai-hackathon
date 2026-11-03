@@ -8,7 +8,7 @@ ARG TARGETARCH
 WORKDIR /src
 
 # Only backend/src is needed for publishing (tests run in CI, not in the image).
-COPY backend/*.slnx backend/Directory.*.props ./backend/
+COPY backend/global.json backend/*.slnx backend/Directory.*.props ./backend/
 COPY backend/src/ ./backend/src/
 RUN dotnet restore backend/src/Beko.Agents.Api/Beko.Agents.Api.csproj -a $TARGETARCH
 
@@ -17,7 +17,7 @@ RUN dotnet publish backend/src/Beko.Agents.Api/Beko.Agents.Api.csproj \
       -o /app/publish /p:UseAppHost=false
 
 # Chiseled = distroless Ubuntu, non-root (uid 1654 "app") by default, no shell.
-FROM mcr.microsoft.com/dotnet/aspnet:10.0.10-noble-chiseled AS runtime
+FROM mcr.microsoft.com/dotnet/aspnet:10.0.14-noble-chiseled AS runtime
 WORKDIR /app
 ENV ASPNETCORE_HTTP_PORTS=8080 \
     DOTNET_GCHeapHardLimitPercent=0x4B \
