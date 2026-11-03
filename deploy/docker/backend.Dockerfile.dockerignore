@@ -1,0 +1,8 @@
+# BuildKit uses <Dockerfile>.dockerignore next to the Dockerfile (context = repo root).
+**
+!backend/global.json
+!backend/*.slnx
+!backend/Directory.*.props
+!backend/src/**
+**/bin/
+**/obj/

@@ -1,0 +1,7 @@
+# BuildKit uses <Dockerfile>.dockerignore next to the Dockerfile (context = repo root).
+**
+!frontend/**
+!deploy/docker/nginx.conf
+frontend/node_modules/
+frontend/dist/
+frontend/coverage/
