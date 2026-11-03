@@ -1,0 +1,54 @@
+# Beko Agent Platform on k3s (namespace beko).
+#
+# Render (needs --load-restrictor because monitoring configs live in /monitoring, shared with Compose),
+# then substitute the two placeholders ${PUBLIC_HOST} and ${IMAGE_TAG}:
+#
+#   kubectl kustomize --load-restrictor LoadRestrictionsNone deploy/kubernetes \
+#     | PUBLIC_HOST=1.2.3.4.sslip.io IMAGE_TAG=<git-sha> envsubst '${PUBLIC_HOST} ${IMAGE_TAG}' \
+#     | kubectl apply -f -
+#
+# Secrets are NOT part of this kustomization: see secrets.template.yaml (deploy.yml creates them).
+# cluster-issuer.yaml is applied separately (cluster-scoped, needs cert-manager CRDs).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: beko
+
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: beko-agent-platform
+    includeSelectors: false
+
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - postgres.yaml
+  - mongodb.yaml
+  - backend.yaml
+  - frontend.yaml
+  - ingress.yaml
+  - monitoring/otel-collector.yaml
+  - monitoring/prometheus.yaml
+  - monitoring/tempo.yaml
+  - monitoring/loki.yaml
+  - monitoring/grafana.yaml
+
+# Config files shared with compose.yml. The name hash makes pods roll when a config changes.
+configMapGenerator:
+  - name: otel-collector-config
+    files:
+      - config.yaml=../../monitoring/otel-collector/config.yaml
+  - name: prometheus-config
+    files:
+      - prometheus.yml=../../monitoring/prometheus/prometheus.yml
+  - name: tempo-config
+    files:
+      - tempo.yaml=../../monitoring/tempo/tempo.yaml
+  - name: loki-config
+    files:
+      - loki.yaml=../../monitoring/loki/loki.yaml
+  - name: grafana-datasources
+    files:
+      - datasources.yaml=../../monitoring/grafana/provisioning/datasources/datasources.yaml
+  - name: grafana-dashboard-providers
+    files:
+      - dashboards.yaml=../../monitoring/grafana/provisioning/dashboards/dashboards.yaml

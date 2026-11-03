@@ -1,0 +1,101 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana
+spec:
+  selector:
+    app: grafana
+  ports:
+    - name: http
+      port: 3000
+      targetPort: 3000
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: grafana
+spec:
+  serviceName: grafana
+  replicas: 1
+  selector:
+    matchLabels:
+      app: grafana
+  template:
+    metadata:
+      labels:
+        app: grafana
+    spec:
+      securityContext:
+        fsGroup: 472
+      containers:
+        - name: grafana
+          image: grafana/grafana:13.2.5
+          env:
+            - name: GF_SERVER_DOMAIN
+              value: ${PUBLIC_HOST}
+            - name: GF_SERVER_ROOT_URL
+              value: https://${PUBLIC_HOST}/grafana/
+            - name: GF_SERVER_SERVE_FROM_SUB_PATH
+              value: "true"
+            - name: GF_SECURITY_ADMIN_USER
+              value: admin
+            - name: GF_SECURITY_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: beko-secrets
+                  key: GRAFANA_ADMIN_PASSWORD
+            - name: GF_ANALYTICS_REPORTING_ENABLED
+              value: "false"
+            - name: GF_FEATURE_TOGGLES_ENABLE
+              value: traceqlEditor
+            - name: GF_PLUGINS_PREINSTALL_AUTO_UPDATE
+              value: "false"
+          ports:
+            - containerPort: 3000
+          readinessProbe:
+            httpGet:
+              path: /grafana/api/health
+              port: 3000
+            periodSeconds: 15
+          livenessProbe:
+            httpGet:
+              path: /grafana/api/health
+              port: 3000
+            initialDelaySeconds: 60
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 384Mi
+          volumeMounts:
+            - name: datasources
+              mountPath: /etc/grafana/provisioning/datasources
+              readOnly: true
+            - name: dashboard-providers
+              mountPath: /etc/grafana/provisioning/dashboards
+              readOnly: true
+            # Dashboards as code arrive in Phase 4 (monitoring/grafana/dashboards -> configMapGenerator).
+            - name: dashboards
+              mountPath: /var/lib/grafana/dashboards
+            - name: data
+              mountPath: /var/lib/grafana
+      volumes:
+        - name: datasources
+          configMap:
+            name: grafana-datasources
+        - name: dashboard-providers
+          configMap:
+            name: grafana-dashboard-providers
+        - name: dashboards
+          emptyDir: {}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: local-path
+        resources:
+          requests:
+            storage: 1Gi

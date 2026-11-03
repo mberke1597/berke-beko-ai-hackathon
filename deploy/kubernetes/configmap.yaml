@@ -1,0 +1,24 @@
+# Non-secret backend configuration (see docs/architecture/contracts.md).
+# Secrets (API key, JWT key, DB passwords) come from the beko-secrets Secret.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: beko-config
+data:
+  ASPNETCORE_ENVIRONMENT: Production
+  ASPNETCORE_HTTP_PORTS: "8080"
+  Mongo__Database: beko
+  Anthropic__DefaultModel: claude-sonnet-5-5
+  Anthropic__FastModel: claude-haiku-5-5
+  Anthropic__MaxTokens: "4096"
+  Jwt__Issuer: beko-agents
+  Jwt__Audience: beko-agents
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+  OTEL_SERVICE_NAME: beko-backend
+  App__Version: 0.1.0
+  App__GrafanaBaseUrl: /grafana
+  # Çeliknaz slice 1: mock HomeWhiz is served by the backend itself.
+  HomeWhiz__BaseUrl: http://localhost:8080/api/mock/homewhiz
+  Simulation__TimeScale: "60"
+  Simulation__TickSeconds: "5"
+  Simulation__OutdoorTempC: "31"
