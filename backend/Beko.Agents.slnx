@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Beko.Agents.Api/Beko.Agents.Api.csproj" />
+    <Project Path="src/Beko.Agents.Application/Beko.Agents.Application.csproj" />
+    <Project Path="src/Beko.Agents.Domain/Beko.Agents.Domain.csproj" />
+    <Project Path="src/Beko.Agents.Infrastructure/Beko.Agents.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Beko.Agents.Api.IntegrationTests/Beko.Agents.Api.IntegrationTests.csproj" />
+    <Project Path="tests/Beko.Agents.Application.Tests/Beko.Agents.Application.Tests.csproj" />
+  </Folder>
+</Solution>

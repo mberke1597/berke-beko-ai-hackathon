@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <UserSecretsId>beko-agents-api</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Beko.Agents.Application\Beko.Agents.Application.csproj" />
+    <ProjectReference Include="..\Beko.Agents.Infrastructure\Beko.Agents.Infrastructure.csproj" />
+  </ItemGroup>
+
+</Project>
