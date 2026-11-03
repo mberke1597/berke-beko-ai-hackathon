@@ -11,7 +11,8 @@ public sealed partial class DeviceService(
     IDeviceEventStore eventStore,
     IDeviceNotifier notifier,
     TimeProvider timeProvider,
-    ILogger<DeviceService> logger)
+    ILogger<DeviceService> logger,
+    IEnumerable<Common.IDeviceCommandObserver>? observers = null)
 {
     public async Task<MyHome?> GetMyHomeAsync(CancellationToken cancellationToken)
     {
@@ -76,7 +77,8 @@ public sealed partial class DeviceService(
                 new KeyValuePair<string, object?>("source", command.Source),
                 new KeyValuePair<string, object?>("type", command.Command.Type));
 
-            await RecordEventAsync(command, before, result, cancellationToken);
+            var recorded = await RecordEventAsync(command, before, result, cancellationToken);
+            await NotifyObserversAsync(recorded, cancellationToken);
             await notifier.ApplianceChangedAsync(result.Appliance, cancellationToken);
             return result;
         }
@@ -88,7 +90,7 @@ public sealed partial class DeviceService(
         }
     }
 
-    private async Task RecordEventAsync(DeviceCommand command, Appliance before, CommandResult result, CancellationToken cancellationToken)
+    private async Task<DeviceEventRecord> RecordEventAsync(DeviceCommand command, Appliance before, CommandResult result, CancellationToken cancellationToken)
     {
         var current = Activity.Current;
         var deviceEvent = new DeviceEventRecord(
@@ -115,7 +117,28 @@ public sealed partial class DeviceService(
             current?.AddException(ex);
             LogEventWriteFailed(logger, ex, result.CommandId, before.Id);
         }
+
+        return deviceEvent;
     }
+
+    /// <summary>Hook point for slice 2 (comfort checks, energy attribution, override detection). A failing observer never fails the command.</summary>
+    private async Task NotifyObserversAsync(DeviceEventRecord deviceEvent, CancellationToken cancellationToken)
+    {
+        foreach (var observer in observers ?? [])
+        {
+            try
+            {
+                await observer.OnCommandAsync(deviceEvent, cancellationToken);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                LogObserverFailed(logger, ex, observer.GetType().Name, deviceEvent.CommandId);
+            }
+        }
+    }
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Command observer {Observer} failed for command {CommandId}")]
+    private static partial void LogObserverFailed(ILogger logger, Exception exception, string observer, string commandId);
 
     [LoggerMessage(Level = LogLevel.Error, Message = "Could not write device event for command {CommandId} on {DeviceId}")]
     private static partial void LogEventWriteFailed(ILogger logger, Exception exception, string commandId, string deviceId);

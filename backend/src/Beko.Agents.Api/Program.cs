@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using Beko.Agents.Api.Celiknaz;
 using Beko.Agents.Api.Hubs;
 using Beko.Agents.Application.Agents.Runs;
 using Beko.Agents.Application.Homes;
@@ -17,6 +18,7 @@ builder.Services.AddInfrastructure(builder.Configuration, builder.Environment);
 builder.Services.AddSignalR();
 builder.Services.AddSingleton<IDeviceNotifier, SignalRDeviceNotifier>();
 builder.Services.AddSingleton<IRunNotifier, SignalRRunNotifier>();
+builder.Services.AddCeliknazHome(builder.Configuration);
 
 var app = builder.Build();
 
